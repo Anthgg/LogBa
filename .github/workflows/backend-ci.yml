@@ -11,6 +11,20 @@ jobs:
     name: Lint, Typecheck and Test
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,11 +49,20 @@ jobs:
       - name: Run Mypy Typecheck
         run: mypy app
 
+      - name: Run Alembic Upgrade
+        env:
+          APP_NAME: "Sistema Logistico Integral"
+          APP_ENV: "test"
+          APP_DEBUG: "true"
+          DATABASE_URL: "postgresql+psycopg://postgres:postgrespassword@localhost:5432/postgres"
+          BACKEND_CORS_ORIGINS: "http://localhost:5173"
+        run: alembic upgrade head
+
       - name: Run Pytest
         env:
           APP_NAME: "Sistema Logistico Integral"
           APP_ENV: "test"
           APP_DEBUG: "true"
-          DATABASE_URL: "postgresql+psycopg://postgres:ci_test_dummy@127.0.0.1:5432/postgres"
+          DATABASE_URL: "postgresql+psycopg://postgres:postgrespassword@localhost:5432/postgres"
           BACKEND_CORS_ORIGINS: "http://localhost:5173"
         run: pytest -v

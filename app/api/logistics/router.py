@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.modules.organization.router import router as organization_router
+
 router = APIRouter(prefix="/api/logistics", tags=["Logistics Core"])
 
 
@@ -18,3 +20,7 @@ def get_logistics_status():
         status="available",
         version="1.0.0",
     )
+
+
+# Include domain modules
+router.include_router(organization_router)
