@@ -13,6 +13,7 @@ from app.modules.organization.schemas import (
     OrganizationResponse,
     OrganizationUpdate,
     RoleCreate,
+    RoleMatrixResponse,
     RoleResponse,
     RoleUpdate,
     StructureResponse,
@@ -218,6 +219,15 @@ def delete_warehouse(warehouse_id: uuid.UUID, db: Session = Depends(get_db)) -> 
 
 
 # --- Roles ---
+@router.get(
+    "/roles/matrix",
+    response_model=RoleMatrixResponse,
+    summary="Get canonical roles responsibilities and SoD segregation matrix",
+)
+def get_role_matrix() -> RoleMatrixResponse:
+    return role_service.get_matrix()
+
+
 @router.post(
     "/roles",
     response_model=RoleResponse,

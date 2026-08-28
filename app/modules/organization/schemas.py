@@ -161,6 +161,27 @@ class RoleResponse(RoleBase):
     updated_at: datetime
 
 
+# --- Role Responsibilities & SoD Schemas ---
+class RoleResponsibilityItem(BaseModel):
+    role_code: str
+    role_name: str
+    responsibilities: List[str]
+    operational_scope: str
+
+
+class SodConflictItem(BaseModel):
+    role_a: str
+    role_b: str
+    conflict_level: str
+    reason: str
+    policy: str
+
+
+class RoleMatrixResponse(BaseModel):
+    canonical_profiles: List[RoleResponsibilityItem]
+    sod_conflicts: List[SodConflictItem]
+
+
 # --- Hierarchy Aggregate Schemas ---
 class WarehouseHierarchyItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)

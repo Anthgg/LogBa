@@ -33,51 +33,61 @@ def run_seed() -> None:
     role_repo = RoleRepository()
 
     try:
-        # --- 1. Canonical System Roles ---
-        system_roles = [
+        # --- 1. Canonical 10 Logistics System Roles ---
+        canonical_system_roles = [
             (
-                "SUPER_ADMIN",
-                "Administrador Global del Sistema",
-                "Acceso total a todas las funciones y configuraciones globales",
+                "PURCHASING",
+                "Encargado de Compras y Abastecimiento",
+                "Gestión de requerimientos, cotizaciones y órdenes de compra",
             ),
             (
-                "LOGISTICS_ADMIN",
-                "Administrador General de Logística",
-                "Gestión operativa integral de sedes, inventarios y despachos",
+                "RECEIVING",
+                "Especialista de Recepción y Descarga",
+                "Recepción física en muelle, cotejo contra guía y registro de mermas",
             ),
             (
-                "WAREHOUSE_SUPERVISOR",
-                "Supervisor de Almacén",
-                "Control de ingresos, salidas, inventarios y operarios de almacén",
+                "QUALITY",
+                "Inspector de Control de Calidad y Cuarentena",
+                "Inspección técnica, gestión de cuarentena y evaluación de conformidad",
             ),
             (
-                "WAREHOUSE_OPERATOR",
-                "Operador de Almacén",
-                "Ejecución de picking, packing, conteo y recepción física",
+                "WAREHOUSE",
+                "Operador de Almacén y Putaway",
+                "Ubicación física en racks, putaway, picking y reabastecimiento interno",
             ),
             (
-                "PURCHASING_OFFICER",
-                "Encargado de Compras",
-                "Gestión de órdenes de compra, proveedores y abastecimiento",
+                "INVENTORY",
+                "Controlador de Inventarios y Stock",
+                "Control de stock, conteos cíclicos, conciliación de kardex y transferencias",
             ),
             (
-                "TRANSPORT_COORDINATOR",
-                "Coordinador de Transporte",
-                "Planificación de rutas, asignación de vehículos y monitoreo",
+                "DISPATCH",
+                "Coordinador de Despacho y Packing",
+                "Consolidación, packing, emisión de actas de despacho y carga vehicular",
+            ),
+            (
+                "TRANSPORT",
+                "Planificador de Transporte y Rutas",
+                "Planificación de rutas, cubicaje de flota y asignación de conductores",
             ),
             (
                 "DRIVER",
-                "Conductor / Transportista",
-                "Ejecución de entregas y confirmación de recepción en campo",
+                "Conductor y Transportista",
+                "Operación de viaje en ruta, monitoreo GPS y confirmación de entrega",
             ),
             (
                 "AUDITOR",
-                "Auditor Técnico y de Control",
-                "Inspección de trazabilidad, auditoría y revisión de kardex",
+                "Auditor Técnico y de Trazabilidad",
+                "Inspección de trazabilidad, bitácoras y cumplimiento SoD sin mutación",
+            ),
+            (
+                "MANAGEMENT",
+                "Gerencia y Dirección Logística",
+                "Supervisión estratégica de KPIs, políticas y aprobación de operaciones críticas",
             ),
         ]
 
-        for code, name, desc in system_roles:
+        for code, name, desc in canonical_system_roles:
             existing_sys_role = role_repo.get_by_code(db, code, organization_id=None)
             if not existing_sys_role:
                 sys_role = Role(

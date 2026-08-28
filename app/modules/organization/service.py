@@ -10,6 +10,7 @@ from app.core.errors import (
     NotFoundError,
     ValidationError,
 )
+from app.modules.organization.matrix import get_canonical_matrix_data
 from app.modules.organization.models import (
     Branch,
     OperationalLocation,
@@ -32,6 +33,7 @@ from app.modules.organization.schemas import (
     OrganizationHierarchyItem,
     OrganizationUpdate,
     RoleCreate,
+    RoleMatrixResponse,
     RoleUpdate,
     StructureResponse,
     WarehouseCreate,
@@ -436,6 +438,9 @@ class RoleService:
             )
         self.role_repo.delete(db, role)
         db.commit()
+
+    def get_matrix(self) -> RoleMatrixResponse:
+        return get_canonical_matrix_data()
 
 
 class StructureService:
