@@ -1,7 +1,11 @@
-from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse
+from typing import List, cast
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes.health import router as health_router
+from app.api.routes.system import router as system_router
 from app.core.config import get_settings
-from app.db.connection import check_database_connection
 
 settings = get_settings()
 
@@ -12,29 +16,21 @@ app = FastAPI(
     redoc_url="/redoc" if settings.APP_DEBUG else None,
 )
 
+cors_origins: List[str] = (
+    cast(List[str], settings.BACKEND_CORS_ORIGINS)
+    if isinstance(settings.BACKEND_CORS_ORIGINS, list)
+    else [str(settings.BACKEND_CORS_ORIGINS)]
+)
 
-@app.get("/live", status_code=status.HTTP_200_OK, tags=["Health"])
-def health_live():
-    """Liveness probe: verifies that FastAPI is up and responding without querying DB."""
-    return {"status": "ok"}
-
-
-@app.get("/ready", tags=["Health"])
-def health_ready():
-    """Readiness probe: validates real database connectivity against PostgreSQL/Supabase."""
-    is_connected, db_status = check_database_connection()
-    if is_connected:
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "status": "ready",
-                "database": "ok",
-            },
-        )
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={
-            "status": "not_ready",
-            "database": db_status,
-        },
+if cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
+
+# Include modular routers
+app.include_router(health_router)
+app.include_router(system_router)

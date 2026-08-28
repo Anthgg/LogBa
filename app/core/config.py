@@ -1,5 +1,7 @@
+import json
 from functools import lru_cache
-from typing import Optional
+from typing import Any, List, Optional, Union
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,10 +11,12 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
 
-    DATABASE_URL: str
+    DATABASE_URL: str = ""
     SUPABASE_URL: Optional[str] = None
     SUPABASE_ANON_KEY: Optional[str] = None
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:5173"]
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -21,19 +25,35 @@ class Settings(BaseSettings):
         case_sensitive=True,
     )
 
+    @field_validator("BACKEND_CORS_ORIGINS", mode="after")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:
+                    pass
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return ["http://localhost:5173"]
+
     @field_validator("DATABASE_URL", mode="after")
     @classmethod
     def validate_and_normalize_database_url(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("DATABASE_URL must not be empty.")
-        
+
         url = v.strip()
         # Normalize protocol for SQLAlchemy 2.x + psycopg v3
         if url.startswith("postgres://"):
-            url = "postgresql+psycopg://" + url[len("postgres://"):]
+            url = "postgresql+psycopg://" + url[len("postgres://") :]
         elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
-            url = "postgresql+psycopg://" + url[len("postgresql://"):]
-            
+            url = "postgresql+psycopg://" + url[len("postgresql://") :]
+
         return url
 
     @property
@@ -44,6 +64,7 @@ class Settings(BaseSettings):
         """Returns a sanitized representation of the database URL hiding credentials."""
         try:
             from sqlalchemy.engine import make_url
+
             url = make_url(self.DATABASE_URL)
             return str(url.render_as_string(hide_password=True))
         except Exception:

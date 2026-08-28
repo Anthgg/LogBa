@@ -13,9 +13,9 @@ Backend del Sistema Logístico Integral construido con **FastAPI**, **SQLAlchemy
 7. **Backend es autoridad de permisos:** Autorización estricta por identidad, organización, sede y rol en cada endpoint.
 8. **Frontend solamente consume contratos API:** Capa pura de presentación e interacción.
 
-## Requisitos Previos
+## Requisitos Técnicos
 
-- Python >= 3.11
+- **Versión Canónica de Python:** Python 3.12
 - PostgreSQL en Supabase
 
 ## Configuración del Entorno
@@ -25,17 +25,18 @@ Backend del Sistema Logístico Integral construido con **FastAPI**, **SQLAlchemy
    cp .env.example .env
    ```
 2. Configurar las variables en `.env`:
-   - `DATABASE_URL`: Cadena de conexión PostgreSQL de Supabase.
-   - `SUPABASE_URL`: URL del proyecto Supabase.
+   - `DATABASE_URL`: Cadena de conexión PostgreSQL de Supabase (`postgresql+psycopg://...`).
+   - `SUPABASE_URL`: URL del proyecto Supabase (`https://...`).
    - `SUPABASE_ANON_KEY`: Llave pública/anon de Supabase.
    - `SUPABASE_SERVICE_ROLE_KEY`: Llave administrativa secreta (opcional, backend-only).
+   - `BACKEND_CORS_ORIGINS`: Orígenes permitidos (por defecto `http://localhost:5173`).
 
 > **Seguridad**: El archivo `.env` contiene credenciales sensibles y está estrictamente ignorado por `.gitignore`. NUNCA versionar ni compartir archivos `.env`.
 
 ## Instalación y Ejecución
 
 ```bash
-# Crear y activar entorno virtual
+# Crear y activar entorno virtual con Python 3.12
 python -m venv .venv
 # En Windows PowerShell:
 .venv\Scripts\Activate.ps1
@@ -47,7 +48,24 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-## Endpoints de Salud (Health Checks)
+## Calidad de Código y Pruebas
+
+```bash
+# Linter con Ruff
+ruff check .
+
+# Formateo con Ruff
+ruff format --check .
+
+# Type checking con Mypy
+mypy app
+
+# Ejecutar suite de pruebas
+pytest -v
+```
+
+## Endpoints Técnicos y de Salud
 
 - `GET /live`: Liveness probe (devuelve `{"status": "ok"}`).
 - `GET /ready`: Readiness probe (verifica la conexión real con Supabase PostgreSQL ejecutando `SELECT 1`).
+- `GET /api/system/info`: Información pública técnica del sistema para validación de integración Frontend-Backend.

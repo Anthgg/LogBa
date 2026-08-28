@@ -1,7 +1,9 @@
 import logging
 from typing import Generator, Tuple
+
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
+
 from app.core.config import get_settings
 
 logger = logging.getLogger("app.db")
