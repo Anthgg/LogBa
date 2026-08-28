@@ -50,7 +50,9 @@ Los datos sintéticos solo están autorizados en entornos controlados de desarro
 Todo script de generación o seeding de datos sintéticos debe incluir una cláusula explícita e intransigente de protección:
 ```python
 if settings.is_production or settings.APP_ENV.lower() == "production":
-    raise RuntimeError("CRITICAL ERROR: Synthetic demo data cannot be seeded in PRODUCTION environment.")
+    raise RuntimeError(
+        "CRITICAL ERROR: Synthetic demo data cannot be seeded in PRODUCTION environment."
+    )
 ```
 
 ---
