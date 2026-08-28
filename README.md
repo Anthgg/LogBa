@@ -2,8 +2,9 @@
 
 Backend del Sistema Logístico Integral construido con **FastAPI**, **SQLAlchemy 2.x**, **Pydantic Settings** y **PostgreSQL (Supabase)**.
 
-## ARCHITECTURE GOLDEN RULE
+## REGLAS DE ORO DEL PROYECTO (F001 — F100)
 
+### 1. Backend como Única Autoridad
 1. **Frontend nunca accede directamente a DB:** Todas las operaciones pasan por FastAPI.
 2. **Frontend nunca consume APIs externas de negocio:** El backend orquesta e integra servicios externos.
 3. **Frontend nunca contiene secretos:** Credenciales, llaves privadas y tokens administrativos viven solo en backend.
@@ -13,6 +14,11 @@ Backend del Sistema Logístico Integral construido con **FastAPI**, **SQLAlchemy
 7. **Backend es autoridad de permisos:** Autorización estricta por identidad, organización, sede y rol en cada endpoint.
 8. **Frontend solamente consume contratos API:** Capa pura de presentación e interacción.
 
+### 2. Datos Sintéticos Realistas (Zero Empty Screens & Real Architecture Flow)
+1. **Recorrido Real:** Los datos de prueba atraviesan toda la arquitectura: `Seed/Backend -> PostgreSQL -> FastAPI -> Frontend UI`.
+2. **Prohibido Mocking en Frontend:** Cero arrays u objetos hardcodeados en cliente para simular operatividad.
+3. **Protección de Producción:** Los datos sintéticos están permitidos en `development`, `test` y `staging`, pero **estrictamente prohibidos** en `production` (`FAKE_OPERATIONAL_DATA_IN_PRODUCTION = 0`).
+
 ## Documentación de Arquitectura y Alcance
 
 La definición formal del alcance, límites y contratos del sistema se encuentra en [`docs/scope/`](docs/scope/):
@@ -21,6 +27,7 @@ La definición formal del alcance, límites y contratos del sistema se encuentra
 - [Exclusiones Explícitas del Sistema](docs/scope/exclusions.md)
 - [Marco de Integraciones Externas](docs/scope/external-integrations.md)
 - [Matriz de Responsabilidades API ↔ UI](docs/scope/api-ui-responsibilities.md)
+- [Política de Datos Sintéticos Realistas](docs/scope/synthetic-data-policy.md)
 
 ## Requisitos Técnicos
 
