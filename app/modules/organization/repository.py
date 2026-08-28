@@ -1,13 +1,14 @@
 import uuid
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.modules.organization.models import (
     Branch,
     OperationalLocation,
     Organization,
+    Role,
     Warehouse,
 )
 
@@ -117,6 +118,53 @@ class WarehouseRepository:
 
     def delete(self, db: Session, warehouse: Warehouse) -> None:
         db.delete(warehouse)
+        db.flush()
+
+
+class RoleRepository:
+    def create(self, db: Session, role: Role) -> Role:
+        db.add(role)
+        db.flush()
+        return role
+
+    def get_by_id(self, db: Session, role_id: uuid.UUID) -> Optional[Role]:
+        return db.scalar(select(Role).where(Role.id == role_id))
+
+    def get_by_code(
+        self, db: Session, code: str, organization_id: Optional[uuid.UUID] = None
+    ) -> Optional[Role]:
+        if organization_id is None:
+            return db.scalar(
+                select(Role).where(
+                    Role.code == code,
+                    Role.organization_id.is_(None),
+                )
+            )
+        return db.scalar(
+            select(Role).where(
+                Role.code == code,
+                Role.organization_id == organization_id,
+            )
+        )
+
+    def list_all(self, db: Session, organization_id: Optional[uuid.UUID] = None) -> List[Role]:
+        if organization_id is not None:
+            stmt = (
+                select(Role)
+                .where(
+                    or_(
+                        Role.organization_id == organization_id,
+                        Role.organization_id.is_(None),
+                    )
+                )
+                .order_by(Role.is_system.desc(), Role.created_at.asc())
+            )
+        else:
+            stmt = select(Role).order_by(Role.is_system.desc(), Role.created_at.asc())
+        return list(db.scalars(stmt).all())
+
+    def delete(self, db: Session, role: Role) -> None:
+        db.delete(role)
         db.flush()
 
 

@@ -132,6 +132,35 @@ class WarehouseResponse(BaseModel):
     updated_at: datetime
 
 
+# --- Role Schemas ---
+class RoleBase(BaseModel):
+    code: str = Field(..., min_length=1, max_length=50)
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    organization_id: Optional[uuid.UUID] = None
+    is_system: bool = False
+    is_active: bool = True
+    is_test_data: bool = False
+
+
+class RoleCreate(RoleBase):
+    pass
+
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    is_active: Optional[bool] = None
+
+
+class RoleResponse(RoleBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
 # --- Hierarchy Aggregate Schemas ---
 class WarehouseHierarchyItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -1,5 +1,5 @@
 import uuid
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -14,12 +14,14 @@ from app.modules.organization.models import (
     Branch,
     OperationalLocation,
     Organization,
+    Role,
     Warehouse,
 )
 from app.modules.organization.repository import (
     BranchRepository,
     OperationalLocationRepository,
     OrganizationRepository,
+    RoleRepository,
     StructureRepository,
     WarehouseRepository,
 )
@@ -29,6 +31,8 @@ from app.modules.organization.schemas import (
     OrganizationCreate,
     OrganizationHierarchyItem,
     OrganizationUpdate,
+    RoleCreate,
+    RoleUpdate,
     StructureResponse,
     WarehouseCreate,
     WarehouseUpdate,
@@ -136,7 +140,6 @@ class BranchService:
                 details={"code": data.code, "organization_id": str(org_id)},
             )
 
-        # Create location entity
         location = OperationalLocation(
             label=data.location.label,
             address_line1=data.location.address_line1,
@@ -249,7 +252,6 @@ class WarehouseService:
                 details={"code": data.code, "branch_id": str(branch_id)},
             )
 
-        # Location Resolution
         if data.use_branch_location:
             location_id = branch.location_id
         else:
@@ -353,6 +355,86 @@ class WarehouseService:
     def delete_warehouse(self, db: Session, warehouse_id: uuid.UUID) -> None:
         warehouse = self.get_warehouse(db, warehouse_id)
         self.warehouse_repo.delete(db, warehouse)
+        db.commit()
+
+
+class RoleService:
+    def __init__(self) -> None:
+        self.role_repo = RoleRepository()
+        self.org_repo = OrganizationRepository()
+
+    def create_role(self, db: Session, data: RoleCreate) -> Role:
+        if data.organization_id is not None:
+            org = self.org_repo.get_by_id(db, data.organization_id)
+            if not org:
+                raise NotFoundError(
+                    message="Organization not found for role scoping.",
+                    code="ORGANIZATION_NOT_FOUND",
+                    details={"organization_id": str(data.organization_id)},
+                )
+
+        if data.is_test_data and settings.is_production:
+            raise ForbiddenError(
+                message="Synthetic test data cannot be created in production environment.",
+                code="SYNTHETIC_DATA_FORBIDDEN_IN_PRODUCTION",
+            )
+
+        existing = self.role_repo.get_by_code(db, data.code, data.organization_id)
+        if existing:
+            raise ConflictError(
+                message=f"Role with code '{data.code}' already exists.",
+                code="DUPLICATE_ROLE_CODE",
+                details={"code": data.code},
+            )
+
+        role = Role(
+            organization_id=data.organization_id,
+            code=data.code,
+            name=data.name,
+            description=data.description,
+            is_system=data.is_system,
+            is_active=data.is_active,
+            is_test_data=data.is_test_data,
+        )
+        self.role_repo.create(db, role)
+        db.commit()
+        db.refresh(role)
+        return role
+
+    def get_role(self, db: Session, role_id: uuid.UUID) -> Role:
+        role = self.role_repo.get_by_id(db, role_id)
+        if not role:
+            raise NotFoundError(
+                message="Role not found.",
+                code="ROLE_NOT_FOUND",
+                details={"role_id": str(role_id)},
+            )
+        return role
+
+    def list_roles(self, db: Session, organization_id: Optional[uuid.UUID] = None) -> List[Role]:
+        return self.role_repo.list_all(db, organization_id)
+
+    def update_role(self, db: Session, role_id: uuid.UUID, data: RoleUpdate) -> Role:
+        role = self.get_role(db, role_id)
+        if data.name is not None:
+            role.name = data.name
+        if data.description is not None:
+            role.description = data.description
+        if data.is_active is not None:
+            role.is_active = data.is_active
+        db.commit()
+        db.refresh(role)
+        return role
+
+    def delete_role(self, db: Session, role_id: uuid.UUID) -> None:
+        role = self.get_role(db, role_id)
+        if role.is_system:
+            raise ConflictError(
+                message="Los roles base del sistema están protegidos y no pueden ser eliminados.",
+                code="SYSTEM_ROLE_PROTECTED",
+                details={"role_id": str(role_id), "code": role.code},
+            )
+        self.role_repo.delete(db, role)
         db.commit()
 
 

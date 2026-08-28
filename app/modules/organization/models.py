@@ -59,6 +59,7 @@ class Organization(Base):
     )
 
     branches: Mapped[list["Branch"]] = relationship("Branch", back_populates="organization")
+    roles: Mapped[list["Role"]] = relationship("Role", back_populates="organization")
 
 
 class Branch(Base):
@@ -147,3 +148,34 @@ class Warehouse(Base):
         foreign_keys=[branch_id],
     )
     location: Mapped["OperationalLocation"] = relationship("OperationalLocation")
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_test_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    organization: Mapped["Organization | None"] = relationship(
+        "Organization", back_populates="roles"
+    )
