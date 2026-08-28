@@ -13,6 +13,15 @@ Backend del Sistema Logístico Integral construido con **FastAPI**, **SQLAlchemy
 7. **Backend es autoridad de permisos:** Autorización estricta por identidad, organización, sede y rol en cada endpoint.
 8. **Frontend solamente consume contratos API:** Capa pura de presentación e interacción.
 
+## Documentación de Arquitectura y Alcance
+
+La definición formal del alcance, límites y contratos del sistema se encuentra en [`docs/scope/`](docs/scope/):
+- [Alcance Logístico Detallado](docs/scope/logistics-scope.md)
+- [Límites de Módulos](docs/scope/module-boundaries.md)
+- [Exclusiones Explícitas del Sistema](docs/scope/exclusions.md)
+- [Marco de Integraciones Externas](docs/scope/external-integrations.md)
+- [Matriz de Responsabilidades API ↔ UI](docs/scope/api-ui-responsibilities.md)
+
 ## Requisitos Técnicos
 
 - **Versión Canónica de Python:** Python 3.12
