@@ -10,18 +10,26 @@ from app.core.errors import (
     NotFoundError,
     ValidationError,
 )
-from app.modules.organization.matrix import get_canonical_matrix_data
+from app.core.rbac import AuthorizationContext
+from app.modules.organization.matrix import (
+    SOD_CONFLICTS_DATA,
+    get_canonical_matrix_data,
+)
 from app.modules.organization.models import (
     Branch,
     OperationalLocation,
     Organization,
+    Permission,
     Role,
     Warehouse,
 )
+from app.modules.organization.permissions_catalog import ENDPOINT_PERMISSION_MATRIX
 from app.modules.organization.repository import (
     BranchRepository,
     OperationalLocationRepository,
     OrganizationRepository,
+    PermissionRepository,
+    RolePermissionRepository,
     RoleRepository,
     StructureRepository,
     WarehouseRepository,
@@ -29,12 +37,17 @@ from app.modules.organization.repository import (
 from app.modules.organization.schemas import (
     BranchCreate,
     BranchUpdate,
+    EndpointPermissionMappingResponse,
     OrganizationCreate,
     OrganizationHierarchyItem,
     OrganizationUpdate,
+    PermissionResponse,
     RoleCreate,
+    RoleEffectivePermissionsResponse,
     RoleMatrixResponse,
+    RolePermissionAssignRequest,
     RoleUpdate,
+    SodConflictItem,
     StructureResponse,
     WarehouseCreate,
     WarehouseUpdate,
@@ -441,6 +454,169 @@ class RoleService:
 
     def get_matrix(self) -> RoleMatrixResponse:
         return get_canonical_matrix_data()
+
+
+class PermissionService:
+    def __init__(self) -> None:
+        self.perm_repo = PermissionRepository()
+        self.role_perm_repo = RolePermissionRepository()
+        self.role_repo = RoleRepository()
+
+    def list_permissions(self, db: Session, category: Optional[str] = None) -> List[Permission]:
+        return self.perm_repo.list_all(db, category=category, active_only=True)
+
+    def get_permission(self, db: Session, permission_id: uuid.UUID) -> Permission:
+        perm = self.perm_repo.get_by_id(db, permission_id)
+        if not perm:
+            raise NotFoundError(
+                message="Permission not found.",
+                code="PERMISSION_NOT_FOUND",
+                details={"permission_id": str(permission_id)},
+            )
+        return perm
+
+    def get_role_effective_permissions(
+        self, db: Session, role_id: uuid.UUID
+    ) -> RoleEffectivePermissionsResponse:
+        role = self.role_repo.get_by_id(db, role_id)
+        if not role:
+            raise NotFoundError(
+                message="Role not found.",
+                code="ROLE_NOT_FOUND",
+                details={"role_id": str(role_id)},
+            )
+
+        perms = self.role_perm_repo.list_permissions_by_role(db, role_id)
+        perm_responses = [PermissionResponse.model_validate(p) for p in perms]
+        perm_codes = [p.code for p in perms]
+
+        # Analyze SoD warnings on current assigned permissions
+        sod_warnings: List[SodConflictItem] = []
+        for conflict in SOD_CONFLICTS_DATA:
+            role_a = conflict["role_a"]
+            role_b = conflict["role_b"]
+            # Detect cross-domain permission accumulation
+            has_domain_a = any(c.startswith(role_a.lower()) for c in perm_codes)
+            has_domain_b = any(c.startswith(role_b.lower()) for c in perm_codes)
+            if has_domain_a and has_domain_b:
+                sod_warnings.append(
+                    SodConflictItem(
+                        role_a=role_a,
+                        role_b=role_b,
+                        conflict_level=conflict["conflict_level"],
+                        reason=conflict["reason"],
+                        policy=conflict["policy"],
+                    )
+                )
+
+        return RoleEffectivePermissionsResponse(
+            role_id=role.id,
+            role_code=role.code,
+            role_name=role.name,
+            is_system=role.is_system,
+            permissions=perm_responses,
+            effective_codes=perm_codes,
+            sod_warnings=sod_warnings,
+        )
+
+    def assign_role_permissions(
+        self, db: Session, role_id: uuid.UUID, data: RolePermissionAssignRequest
+    ) -> RoleEffectivePermissionsResponse:
+        role = self.role_repo.get_by_id(db, role_id)
+        if not role:
+            raise NotFoundError(
+                message="Role not found.",
+                code="ROLE_NOT_FOUND",
+                details={"role_id": str(role_id)},
+            )
+
+        # Resolve target permission IDs
+        target_perm_ids: List[uuid.UUID] = []
+        if data.permission_ids is not None:
+            found_perms = self.perm_repo.list_by_ids(db, data.permission_ids)
+            if len(found_perms) != len(data.permission_ids):
+                found_ids = {p.id for p in found_perms}
+                missing = [str(pid) for pid in data.permission_ids if pid not in found_ids]
+                raise ValidationError(
+                    message="One or more specified permission IDs were not found in the catalog.",
+                    code="PERMISSION_NOT_FOUND",
+                    details={"missing_permission_ids": missing},
+                )
+            target_perm_ids = [p.id for p in found_perms]
+        elif data.permission_codes is not None:
+            found_perms = self.perm_repo.list_by_codes(db, data.permission_codes)
+            if len(found_perms) != len(data.permission_codes):
+                found_codes = {p.code for p in found_perms}
+                missing_codes = [c for c in data.permission_codes if c not in found_codes]
+                raise ValidationError(
+                    message="One or more specified permission codes were not found in the catalog.",
+                    code="PERMISSION_NOT_FOUND",
+                    details={"missing_permission_codes": missing_codes},
+                )
+            target_perm_ids = [p.id for p in found_perms]
+
+        # Invariant: AUDITOR cannot be assigned dangerous operational mutations
+        if role.code == "AUDITOR":
+            assigned_perms = self.perm_repo.list_by_ids(db, target_perm_ids)
+            dangerous_actions = {
+                "create",
+                "update",
+                "delete",
+                "adjust",
+                "release",
+                "assign",
+                "void",
+            }
+            violations = [p.code for p in assigned_perms if p.action in dangerous_actions]
+            if violations:
+                raise ConflictError(
+                    message="Auditor profile is read-only and cannot have operational mutations.",
+                    code="AUDITOR_MUTATION_FORBIDDEN",
+                    details={"violating_permissions": violations},
+                )
+
+        self.role_perm_repo.set_role_permissions(db, role_id, target_perm_ids)
+        db.commit()
+
+        return self.get_role_effective_permissions(db, role_id)
+
+    def create_authorization_context(
+        self, db: Session, role_ids: List[uuid.UUID], org_id: Optional[uuid.UUID] = None
+    ) -> AuthorizationContext:
+        """Create an AuthorizationContext instance for domain evaluation."""
+        if not role_ids:
+            return AuthorizationContext(is_active=False)
+
+        role_codes: List[str] = []
+        all_perms: set[str] = set()
+
+        for rid in role_ids:
+            role = self.role_repo.get_by_id(db, rid)
+            if role and role.is_active:
+                role_codes.append(role.code)
+                perms = self.role_perm_repo.list_permissions_by_role(db, rid)
+                for p in perms:
+                    if p.is_active:
+                        all_perms.add(p.code)
+
+        return AuthorizationContext(
+            role_ids=role_ids,
+            role_codes=role_codes,
+            permissions=all_perms,
+            organization_id=org_id,
+            is_active=len(role_codes) > 0,
+        )
+
+    def get_endpoint_matrix(self) -> List[EndpointPermissionMappingResponse]:
+        return [
+            EndpointPermissionMappingResponse(
+                endpoint=m["endpoint"],
+                method=m["method"],
+                required_permission=m["permission"],
+                phase=m["phase"],
+            )
+            for m in ENDPOINT_PERMISSION_MATRIX
+        ]
 
 
 class StructureService:

@@ -1,14 +1,16 @@
 import uuid
 from typing import List, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.modules.organization.models import (
     Branch,
     OperationalLocation,
     Organization,
+    Permission,
     Role,
+    RolePermission,
     Warehouse,
 )
 
@@ -166,6 +168,68 @@ class RoleRepository:
     def delete(self, db: Session, role: Role) -> None:
         db.delete(role)
         db.flush()
+
+
+class PermissionRepository:
+    def create(self, db: Session, permission: Permission) -> Permission:
+        db.add(permission)
+        db.flush()
+        return permission
+
+    def get_by_id(self, db: Session, permission_id: uuid.UUID) -> Optional[Permission]:
+        return db.scalar(select(Permission).where(Permission.id == permission_id))
+
+    def get_by_code(self, db: Session, code: str) -> Optional[Permission]:
+        return db.scalar(select(Permission).where(Permission.code == code))
+
+    def list_all(
+        self, db: Session, category: Optional[str] = None, active_only: bool = False
+    ) -> List[Permission]:
+        stmt = select(Permission)
+        if category:
+            stmt = stmt.where(Permission.category == category)
+        if active_only:
+            stmt = stmt.where(Permission.is_active.is_(True))
+        stmt = stmt.order_by(Permission.category.asc(), Permission.code.asc())
+        return list(db.scalars(stmt).all())
+
+    def list_by_ids(self, db: Session, permission_ids: List[uuid.UUID]) -> List[Permission]:
+        if not permission_ids:
+            return []
+        stmt = select(Permission).where(Permission.id.in_(permission_ids))
+        return list(db.scalars(stmt).all())
+
+    def list_by_codes(self, db: Session, codes: List[str]) -> List[Permission]:
+        if not codes:
+            return []
+        stmt = select(Permission).where(Permission.code.in_(codes))
+        return list(db.scalars(stmt).all())
+
+
+class RolePermissionRepository:
+    def list_permissions_by_role(self, db: Session, role_id: uuid.UUID) -> List[Permission]:
+        stmt = (
+            select(Permission)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == role_id, Permission.is_active.is_(True))
+            .order_by(Permission.category.asc(), Permission.code.asc())
+        )
+        return list(db.scalars(stmt).all())
+
+    def set_role_permissions(
+        self, db: Session, role_id: uuid.UUID, permission_ids: List[uuid.UUID]
+    ) -> List[Permission]:
+        # Delete existing role permissions
+        db.execute(delete(RolePermission).where(RolePermission.role_id == role_id))
+        db.flush()
+
+        # Insert new role permissions
+        for pid in set(permission_ids):
+            rp = RolePermission(role_id=role_id, permission_id=pid)
+            db.add(rp)
+        db.flush()
+
+        return self.list_permissions_by_role(db, role_id)
 
 
 class StructureRepository:

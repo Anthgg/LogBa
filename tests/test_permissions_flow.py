@@ -1,0 +1,186 @@
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.core.rbac import AuthorizationContext
+from app.main import app
+from app.modules.organization.permissions_catalog import (
+    CANONICAL_PERMISSIONS_CATALOG,
+    CANONICAL_ROLE_BASELINES,
+    ENDPOINT_PERMISSION_MATRIX,
+)
+from app.scripts import seed_demo
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+def test_permission_catalog_completeness(client: TestClient):
+    seed_demo.run_seed()
+    response = client.get("/api/logistics/permissions")
+    assert response.status_code == 200
+    perms = response.json()
+    assert len(perms) >= len(CANONICAL_PERMISSIONS_CATALOG)
+
+    perm_codes = {p["code"] for p in perms}
+    for catalog_item in CANONICAL_PERMISSIONS_CATALOG:
+        assert catalog_item["code"] in perm_codes
+        item = next(p for p in perms if p["code"] == catalog_item["code"])
+        assert item["is_system"] is True
+        assert item["is_active"] is True
+        assert item["risk_level"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+        assert len(item["category"]) > 0
+        assert len(item["resource"]) > 0
+        assert len(item["action"]) > 0
+
+
+def test_permission_filtering_by_category(client: TestClient):
+    seed_demo.run_seed()
+    response = client.get("/api/logistics/permissions?category=ORGANIZATION")
+    assert response.status_code == 200
+    org_perms = response.json()
+    assert len(org_perms) >= 4
+    for p in org_perms:
+        assert p["category"] == "ORGANIZATION"
+
+
+def test_canonical_role_baselines_integrity(client: TestClient):
+    seed_demo.run_seed()
+    roles_res = client.get("/api/logistics/roles")
+    assert roles_res.status_code == 200
+    roles = roles_res.json()
+    sys_roles = {r["code"]: r for r in roles if r["is_system"]}
+
+    for role_code, expected_baseline in CANONICAL_ROLE_BASELINES.items():
+        assert role_code in sys_roles
+        role_id = sys_roles[role_code]["id"]
+        perm_res = client.get(f"/api/logistics/roles/{role_id}/permissions")
+        assert perm_res.status_code == 200
+        data = perm_res.json()
+        effective_codes = set(data["effective_codes"])
+        for exp_code in expected_baseline:
+            assert exp_code in effective_codes, f"Role {role_code} missing {exp_code}"
+
+
+def test_auditor_profile_least_privilege_and_no_mutations(client: TestClient):
+    seed_demo.run_seed()
+    roles_res = client.get("/api/logistics/roles")
+    roles = roles_res.json()
+    auditor_role = next(r for r in roles if r["code"] == "AUDITOR")
+
+    perm_res = client.get(f"/api/logistics/roles/{auditor_role['id']}/permissions")
+    assert perm_res.status_code == 200
+    auditor_perms = perm_res.json()["permissions"]
+
+    # Invariant: Auditor must NOT have operational mutation actions
+    dangerous_actions = {"create", "update", "delete", "adjust", "release", "assign", "void"}
+    for p in auditor_perms:
+        assert p["action"] not in dangerous_actions, f"Auditor has dangerous mutation: {p['code']}"
+
+    # Attempting to assign mutation to AUDITOR is blocked with 409
+    assign_res = client.put(
+        f"/api/logistics/roles/{auditor_role['id']}/permissions",
+        json={"permission_codes": ["inventory.adjust", "audit.read"]},
+    )
+    assert assign_res.status_code == 409
+    assert assign_res.json()["code"] == "AUDITOR_MUTATION_FORBIDDEN"
+
+
+def test_custom_role_permission_assignment_and_replacement(client: TestClient):
+    seed_demo.run_seed()
+    # 1. Create a custom role
+    code = f"CUSTOM-RBAC-{uuid.uuid4().hex[:6]}"
+    create_res = client.post(
+        "/api/logistics/roles",
+        json={
+            "code": code,
+            "name": "Custom RBAC Operator",
+            "description": "Role for testing RBAC assignment",
+            "is_system": False,
+            "is_test_data": True,
+        },
+    )
+    assert create_res.status_code == 201
+    custom_role_id = create_res.json()["id"]
+
+    # 2. Assign initial permissions
+    initial_perms = ["organization.read", "warehouse.read", "warehouse.update"]
+    assign_res = client.put(
+        f"/api/logistics/roles/{custom_role_id}/permissions",
+        json={"permission_codes": initial_perms},
+    )
+    assert assign_res.status_code == 200
+    res_data = assign_res.json()
+    assert set(res_data["effective_codes"]) == set(initial_perms)
+
+    # 3. Replace permissions
+    updated_perms = ["organization.read", "branch.read"]
+    replace_res = client.put(
+        f"/api/logistics/roles/{custom_role_id}/permissions",
+        json={"permission_codes": updated_perms},
+    )
+    assert replace_res.status_code == 200
+    assert set(replace_res.json()["effective_codes"]) == set(updated_perms)
+
+    # 4. Inexistent permission rejected with 422
+    bad_res = client.put(
+        f"/api/logistics/roles/{custom_role_id}/permissions",
+        json={"permission_codes": ["non_existent.action"]},
+    )
+    assert bad_res.status_code == 422
+    assert bad_res.json()["code"] == "PERMISSION_NOT_FOUND"
+
+    # Cleanup
+    client.delete(f"/api/logistics/roles/{custom_role_id}")
+
+
+def test_rbac_default_deny_engine():
+    # 1. Inactive context
+    ctx_inactive = AuthorizationContext(
+        role_codes=["WAREHOUSE"],
+        permissions={"warehouse.read", "warehouse.putaway"},
+        is_active=False,
+    )
+    assert ctx_inactive.has_permission("warehouse.read") is False
+    with pytest.raises(Exception, match="missing required permission"):
+        ctx_inactive.require_permission("warehouse.read")
+
+    # 2. Active context with specific permissions
+    ctx_active = AuthorizationContext(
+        role_codes=["WAREHOUSE"],
+        permissions={"warehouse.read", "warehouse.putaway"},
+        is_active=True,
+    )
+    assert ctx_active.has_permission("warehouse.read") is True
+    assert ctx_active.has_permission("warehouse.putaway") is True
+
+    # Unassigned action -> DENY
+    assert ctx_active.has_permission("inventory.adjust") is False
+    with pytest.raises(Exception, match="missing required permission"):
+        ctx_active.require_permission("inventory.adjust")
+
+    # Unknown / empty permission -> DENY
+    assert ctx_active.has_permission("") is False
+    assert ctx_active.has_permission("invalid.unknown") is False
+
+
+def test_endpoint_permission_matrix_endpoint(client: TestClient):
+    response = client.get("/api/logistics/permissions/endpoint-matrix")
+    assert response.status_code == 200
+    matrix = response.json()
+    assert len(matrix) == len(ENDPOINT_PERMISSION_MATRIX)
+
+    routes = {f"{m['method']} {m['endpoint']}" for m in matrix}
+    assert "GET /api/logistics/structure" in routes
+    assert "POST /api/logistics/organizations" in routes
+    assert "GET /api/logistics/permissions" in routes
+    assert "PUT /api/logistics/roles/{id}/permissions" in routes
+
+
+def test_production_seed_protection(monkeypatch):
+    monkeypatch.setattr(seed_demo.settings, "APP_ENV", "production")
+    with pytest.raises(RuntimeError, match="CRITICAL ERROR"):
+        seed_demo.run_seed()

@@ -161,6 +161,55 @@ class RoleResponse(RoleBase):
     updated_at: datetime
 
 
+# --- Permission Schemas ---
+class PermissionBase(BaseModel):
+    code: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=150)
+    description: Optional[str] = Field(None, max_length=255)
+    category: str = Field(..., min_length=1, max_length=50)
+    resource: str = Field(..., min_length=1, max_length=50)
+    action: str = Field(..., min_length=1, max_length=50)
+    risk_level: str = Field("LOW", min_length=1, max_length=20)
+    is_system: bool = True
+    is_active: bool = True
+    future_phase_owner: Optional[str] = Field(None, max_length=20)
+
+
+class PermissionResponse(PermissionBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class PermissionGroupResponse(BaseModel):
+    category: str
+    permissions: List[PermissionResponse]
+
+
+class RolePermissionAssignRequest(BaseModel):
+    permission_ids: Optional[List[uuid.UUID]] = None
+    permission_codes: Optional[List[str]] = None
+
+
+class RoleEffectivePermissionsResponse(BaseModel):
+    role_id: uuid.UUID
+    role_code: str
+    role_name: str
+    is_system: bool
+    permissions: List[PermissionResponse]
+    effective_codes: List[str]
+    sod_warnings: List["SodConflictItem"] = []
+
+
+class EndpointPermissionMappingResponse(BaseModel):
+    endpoint: str
+    method: str
+    required_permission: str
+    phase: str
+
+
 # --- Role Responsibilities & SoD Schemas ---
 class RoleResponsibilityItem(BaseModel):
     role_code: str

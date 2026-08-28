@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.connection import get_db
@@ -9,11 +9,15 @@ from app.modules.organization.schemas import (
     BranchCreate,
     BranchResponse,
     BranchUpdate,
+    EndpointPermissionMappingResponse,
     OrganizationCreate,
     OrganizationResponse,
     OrganizationUpdate,
+    PermissionResponse,
     RoleCreate,
+    RoleEffectivePermissionsResponse,
     RoleMatrixResponse,
+    RolePermissionAssignRequest,
     RoleResponse,
     RoleUpdate,
     StructureResponse,
@@ -24,6 +28,7 @@ from app.modules.organization.schemas import (
 from app.modules.organization.service import (
     BranchService,
     OrganizationService,
+    PermissionService,
     RoleService,
     StructureService,
     WarehouseService,
@@ -35,6 +40,7 @@ branch_service = BranchService()
 wh_service = WarehouseService()
 struct_service = StructureService()
 role_service = RoleService()
+perm_service = PermissionService()
 
 
 # --- Structure Overview ---
@@ -218,7 +224,40 @@ def delete_warehouse(warehouse_id: uuid.UUID, db: Session = Depends(get_db)) -> 
     wh_service.delete_warehouse(db, warehouse_id)
 
 
-# --- Roles ---
+# --- Permissions ---
+@router.get(
+    "/permissions/endpoint-matrix",
+    response_model=List[EndpointPermissionMappingResponse],
+    summary="Get canonical REST endpoint-to-permission security matrix",
+)
+def get_endpoint_matrix() -> List[EndpointPermissionMappingResponse]:
+    return perm_service.get_endpoint_matrix()
+
+
+@router.get(
+    "/permissions",
+    response_model=List[PermissionResponse],
+    summary="List action-based permissions catalog",
+)
+def list_permissions(
+    category: Optional[str] = Query(None, description="Filter by permission category"),
+    db: Session = Depends(get_db),
+) -> List[PermissionResponse]:
+    res = perm_service.list_permissions(db, category)
+    return [PermissionResponse.model_validate(p) for p in res]
+
+
+@router.get(
+    "/permissions/{permission_id}",
+    response_model=PermissionResponse,
+    summary="Get permission by ID",
+)
+def get_permission(permission_id: uuid.UUID, db: Session = Depends(get_db)) -> PermissionResponse:
+    res = perm_service.get_permission(db, permission_id)
+    return PermissionResponse.model_validate(res)
+
+
+# --- Roles & Role Permissions ---
 @router.get(
     "/roles/matrix",
     response_model=RoleMatrixResponse,
@@ -280,3 +319,27 @@ def update_role(
 )
 def delete_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
     role_service.delete_role(db, role_id)
+
+
+@router.get(
+    "/roles/{role_id}/permissions",
+    response_model=RoleEffectivePermissionsResponse,
+    summary="Get effective action permissions and SoD warnings for a role",
+)
+def get_role_permissions(
+    role_id: uuid.UUID, db: Session = Depends(get_db)
+) -> RoleEffectivePermissionsResponse:
+    return perm_service.get_role_effective_permissions(db, role_id)
+
+
+@router.put(
+    "/roles/{role_id}/permissions",
+    response_model=RoleEffectivePermissionsResponse,
+    summary="Assign/replace action permissions for a role",
+)
+def assign_role_permissions(
+    role_id: uuid.UUID,
+    data: RolePermissionAssignRequest,
+    db: Session = Depends(get_db),
+) -> RoleEffectivePermissionsResponse:
+    return perm_service.assign_role_permissions(db, role_id, data)

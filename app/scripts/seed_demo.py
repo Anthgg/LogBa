@@ -6,13 +6,20 @@ from app.modules.organization.models import (
     Branch,
     OperationalLocation,
     Organization,
+    Permission,
     Role,
     Warehouse,
+)
+from app.modules.organization.permissions_catalog import (
+    CANONICAL_PERMISSIONS_CATALOG,
+    CANONICAL_ROLE_BASELINES,
 )
 from app.modules.organization.repository import (
     BranchRepository,
     OperationalLocationRepository,
     OrganizationRepository,
+    PermissionRepository,
+    RolePermissionRepository,
     RoleRepository,
     WarehouseRepository,
 )
@@ -31,9 +38,36 @@ def run_seed() -> None:
     wh_repo = WarehouseRepository()
     loc_repo = OperationalLocationRepository()
     role_repo = RoleRepository()
+    perm_repo = PermissionRepository()
+    role_perm_repo = RolePermissionRepository()
 
     try:
-        # --- 1. Canonical 10 Logistics System Roles ---
+        # --- 1. Canonical Permissions Catalog ---
+        for p_data in CANONICAL_PERMISSIONS_CATALOG:
+            code = p_data["code"]
+            assert isinstance(code, str)
+            existing_perm = perm_repo.get_by_code(db, code)
+            if not existing_perm:
+                perm = Permission(
+                    code=code,
+                    name=str(p_data["name"]),
+                    description=str(p_data["description"]) if p_data["description"] else None,
+                    category=str(p_data["category"]),
+                    resource=str(p_data["resource"]),
+                    action=str(p_data["action"]),
+                    risk_level=str(p_data["risk_level"]),
+                    is_system=True,
+                    is_active=True,
+                    future_phase_owner=str(p_data["future_phase_owner"])
+                    if p_data["future_phase_owner"]
+                    else None,
+                )
+                perm_repo.create(db, perm)
+                print(f"Permission created: {code}")
+
+        db.flush()
+
+        # --- 2. Canonical 10 Logistics System Roles ---
         canonical_system_roles = [
             (
                 "PURCHASING",
@@ -88,8 +122,8 @@ def run_seed() -> None:
         ]
 
         for code, name, desc in canonical_system_roles:
-            existing_sys_role = role_repo.get_by_code(db, code, organization_id=None)
-            if not existing_sys_role:
+            sys_role = role_repo.get_by_code(db, code, organization_id=None)
+            if not sys_role:
                 sys_role = Role(
                     code=code,
                     name=name,
@@ -100,9 +134,19 @@ def run_seed() -> None:
                     is_test_data=False,
                 )
                 role_repo.create(db, sys_role)
+                db.flush()
                 print(f"System Role created: {code}")
 
-        # --- 2. Demo Organization ---
+            # Assign Baseline Permissions
+            baseline_codes = CANONICAL_ROLE_BASELINES.get(code, [])
+            if baseline_codes:
+                assigned_existing = role_perm_repo.list_permissions_by_role(db, sys_role.id)
+                if not assigned_existing:
+                    perms = perm_repo.list_by_codes(db, baseline_codes)
+                    role_perm_repo.set_role_permissions(db, sys_role.id, [p.id for p in perms])
+                    print(f"Assigned {len(perms)} baseline permissions to {code}")
+
+        # --- 3. Demo Organization ---
         demo_org = org_repo.get_by_code(db, "DEMO-ORG-001")
         if not demo_org:
             demo_org = Organization(
@@ -115,7 +159,7 @@ def run_seed() -> None:
             db.flush()
             print(f"Demo Organization created: {demo_org.code} ({demo_org.id})")
 
-        # --- 3. Demo Custom Role ---
+        # --- 4. Demo Custom Role ---
         custom_role = role_repo.get_by_code(db, "DEMO-ROLE-QC", organization_id=demo_org.id)
         if not custom_role:
             custom_role = Role(
@@ -128,9 +172,24 @@ def run_seed() -> None:
                 is_test_data=True,
             )
             role_repo.create(db, custom_role)
+            db.flush()
             print(f"Demo Custom Role created: {custom_role.code}")
 
-        # --- 4. Branch 1: Lima ---
+        # Assign realistic permissions to Demo Custom Role
+        demo_perm_codes = [
+            "organization.read",
+            "branch.read",
+            "warehouse.read",
+            "quality.read",
+            "quality.inspect",
+        ]
+        assigned_demo_perms = role_perm_repo.list_permissions_by_role(db, custom_role.id)
+        if not assigned_demo_perms:
+            demo_perms = perm_repo.list_by_codes(db, demo_perm_codes)
+            role_perm_repo.set_role_permissions(db, custom_role.id, [p.id for p in demo_perms])
+            print(f"Assigned {len(demo_perms)} permissions to DEMO-ROLE-QC")
+
+        # --- 5. Branch 1: Lima ---
         branch_lim = branch_repo.get_by_code(db, demo_org.id, "DEMO-LIM")
         if not branch_lim:
             loc_lim = OperationalLocation(
@@ -197,7 +256,7 @@ def run_seed() -> None:
             wh_repo.create(db, wh2)
             print(f"Demo Warehouse created: {wh2.code} (custom location)")
 
-        # --- 5. Branch 2: Arequipa ---
+        # --- 6. Branch 2: Arequipa ---
         branch_aqp = branch_repo.get_by_code(db, demo_org.id, "DEMO-AQP")
         if not branch_aqp:
             loc_aqp = OperationalLocation(
