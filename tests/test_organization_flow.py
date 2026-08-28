@@ -13,6 +13,7 @@ def client():
 
 
 def test_structure_endpoint(client: TestClient):
+    seed_demo.run_seed()
     response = client.get("/api/logistics/structure")
     assert response.status_code == 200
     data = response.json()
