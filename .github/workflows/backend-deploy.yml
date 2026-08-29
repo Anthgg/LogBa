@@ -2,13 +2,11 @@ name: Backend Deploy to Cloud Run
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'app/**'
-      - 'alembic/**'
-      - 'Dockerfile'
-      - 'requirements.txt'
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'production'
 
 concurrency:
   group: backend-deploy-production
