@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.db.connection import SessionLocal
 from app.main import app
+from app.scripts import seed_demo
 from app.shared.audit.contracts import AuditContext
 from app.shared.audit.sanitizer import sanitize_sensitive_data
 from app.shared.audit.service import AuditService
@@ -117,6 +118,7 @@ def test_database_audit_immutability():
 
 
 def test_f004_warehouse_lifecycle_audited(client: TestClient):
+    seed_demo.run_seed()
     # 1. Get demo organization and branch
     struct_res = client.get("/api/logistics/structure")
     assert struct_res.status_code == 200
@@ -190,6 +192,7 @@ def test_f004_warehouse_lifecycle_audited(client: TestClient):
 
 
 def test_f006_permission_assignment_audited(client: TestClient):
+    seed_demo.run_seed()
     roles_res = client.get("/api/logistics/roles")
     roles = roles_res.json()
     demo_role = next(r for r in roles if r["code"] == "DEMO-ROLE-QC")
@@ -214,6 +217,7 @@ def test_f006_permission_assignment_audited(client: TestClient):
 
 
 def test_auditor_mutation_denied_audited(client: TestClient):
+    seed_demo.run_seed()
     roles_res = client.get("/api/logistics/roles")
     roles = roles_res.json()
     auditor_role = next(r for r in roles if r["code"] == "AUDITOR")
