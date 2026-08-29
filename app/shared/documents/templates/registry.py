@@ -27,7 +27,9 @@ class TemplateRegistry:
             supported_statuses=["DRAFT", "APPROVED", "ISSUED", "VOID"],
             created_at="2026-08-29T00:00:00Z",
         ),
-        # 1. Requerimiento de Compra (REQ) - F015
+        # -------------------------------------------------------------------
+        # Purchasing Package (F015)
+        # -------------------------------------------------------------------
         "purchase_requisition_v1": TemplateManifest(
             template_key="purchase_requisition_v1",
             family="purchasing",
@@ -44,7 +46,6 @@ class TemplateRegistry:
             supported_statuses=["DRAFT", "PENDING", "APPROVED", "REJECTED", "COMPLETED", "VOID"],
             created_at="2026-08-29T00:00:00Z",
         ),
-        # 2. Solicitud de Cotización (RFQ) - F015
         "request_for_quotation_v1": TemplateManifest(
             template_key="request_for_quotation_v1",
             family="purchasing",
@@ -61,7 +62,6 @@ class TemplateRegistry:
             supported_statuses=["DRAFT", "ISSUED", "CLOSED", "VOID"],
             created_at="2026-08-29T00:00:00Z",
         ),
-        # 3. Cuadro Comparativo de Ofertas (CMP) - F015 (Landscape)
         "comparative_table_v1": TemplateManifest(
             template_key="comparative_table_v1",
             family="purchasing",
@@ -78,7 +78,6 @@ class TemplateRegistry:
             supported_statuses=["DRAFT", "PENDING", "APPROVED", "VOID"],
             created_at="2026-08-29T00:00:00Z",
         ),
-        # 4. Orden de Compra Oficial (PO) - F015
         "purchase_order_v1": TemplateManifest(
             template_key="purchase_order_v1",
             family="purchasing",
@@ -94,7 +93,6 @@ class TemplateRegistry:
             supported_statuses=["DRAFT", "PENDING", "APPROVED", "ISSUED", "COMPLETED", "VOID"],
             created_at="2026-08-29T00:00:00Z",
         ),
-        # 5. Aprobación de Compra (POA) - F015
         "purchase_approval_v1": TemplateManifest(
             template_key="purchase_approval_v1",
             family="purchasing",
@@ -110,7 +108,6 @@ class TemplateRegistry:
             supported_statuses=["PENDING", "APPROVED", "REJECTED"],
             created_at="2026-08-29T00:00:00Z",
         ),
-        # 6. Constancia de Envío al Proveedor (PSC) - F015
         "supplier_send_confirmation_v1": TemplateManifest(
             template_key="supplier_send_confirmation_v1",
             family="purchasing",
@@ -126,10 +123,111 @@ class TemplateRegistry:
             supported_statuses=["REGISTERED", "PROCESSED", "VOID"],
             created_at="2026-08-29T00:00:00Z",
         ),
+        # -------------------------------------------------------------------
+        # Inbound Receiving Package (F016)
+        # -------------------------------------------------------------------
+        "arrival_appointment_v1": TemplateManifest(
+            template_key="arrival_appointment_v1",
+            family="receiving",
+            version="1.0.0",
+            title="Cita de Llegada / Arribo",
+            description=(
+                "Cita programada de llegada de transporte con ventana horaria, "
+                "placa, conductor y carga estimada."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["SCHEDULED", "CHECKED_IN", "UNLOADED", "CANCELLED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "gate_control_v1": TemplateManifest(
+            template_key="gate_control_v1",
+            family="receiving",
+            version="1.0.0",
+            title="Control de Puerta Vehicular",
+            description=(
+                "Registro de control de garita vehicular con horas de entrada/salida, "
+                "precintos y documentos."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["INSIDE", "EXITED", "CANCELLED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "receiving_report_v1": TemplateManifest(
+            template_key="receiving_report_v1",
+            family="receiving",
+            version="1.0.0",
+            title="Acta de Recepción Técnica",
+            description=(
+                "Acta de inspección y recepción técnica en muelle con comparación "
+                "ordenada vs recibida y lotes."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "COMPLETED", "VOID"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "goods_receipt_v1": TemplateManifest(
+            template_key="goods_receipt_v1",
+            family="receiving",
+            version="1.0.0",
+            title="Guía de Ingreso a Almacén",
+            description=(
+                "Nota oficial de ingreso de mercancías a almacén con cantidades aceptadas "
+                "y estado de calidad."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "ISSUED", "CANCELLED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "receiving_difference_v1": TemplateManifest(
+            template_key="receiving_difference_v1",
+            family="receiving",
+            version="1.0.0",
+            title="Acta de Diferencias de Recepción",
+            description=(
+                "Constancia de discrepancias en descarga: faltantes, sobrantes, "
+                "daños o precintos rotos."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["OPEN", "RESOLVED", "VOID"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "non_conformity_v1": TemplateManifest(
+            template_key="non_conformity_v1",
+            family="receiving",
+            version="1.0.0",
+            title="Reporte de No Conformidad",
+            description=(
+                "Reporte formal de no conformidad con hallazgos, severidad, "
+                "evidencias y propuesta de disposición."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["ISSUED", "ACCEPTED_BY_SUPPLIER", "CLOSED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
     }
 
     _template_files: Dict[str, str] = {
+        # Base
         "base_document_v1": "base/base_document_v1.html",
+        # Purchasing
         "purchase_requisition_v1": "purchasing/purchase_requisition_v1.html",
         "requisition_v1": "purchasing/purchase_requisition_v1.html",
         "request_for_quotation_v1": "purchasing/request_for_quotation_v1.html",
@@ -140,6 +238,14 @@ class TemplateRegistry:
         "purchase_approval_v1": "purchasing/purchase_approval_v1.html",
         "supplier_send_confirmation_v1": "purchasing/supplier_send_confirmation_v1.html",
         "psc_v1": "purchasing/supplier_send_confirmation_v1.html",
+        # Receiving
+        "arrival_appointment_v1": "receiving/arrival_appointment_v1.html",
+        "gate_control_v1": "receiving/gate_control_v1.html",
+        "receiving_report_v1": "receiving/receiving_report_v1.html",
+        "goods_receipt_v1": "receiving/goods_receipt_v1.html",
+        "receiving_difference_v1": "receiving/receiving_difference_v1.html",
+        "receiving_diff_v1": "receiving/receiving_difference_v1.html",
+        "non_conformity_v1": "receiving/non_conformity_v1.html",
     }
 
     @classmethod
@@ -162,6 +268,8 @@ class TemplateRegistry:
             resolved_key = "purchase_order_v1"
         elif template_key == "psc_v1":
             resolved_key = "supplier_send_confirmation_v1"
+        elif template_key == "receiving_diff_v1":
+            resolved_key = "receiving_difference_v1"
 
         if resolved_key not in cls._manifests:
             raise DomainError(

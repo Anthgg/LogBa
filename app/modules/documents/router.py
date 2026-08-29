@@ -1538,3 +1538,754 @@ def render_purchasing_sample_document(
             "Content-Disposition": f'inline; filename="{filename}"',
         },
     )
+
+
+def build_receiving_sample_context(
+    doc_code: str,
+    scenario: str,
+    status_code: Optional[str],
+    org_name: str,
+    tax_id: str,
+    branch_name: str,
+    branch_code: str,
+    branch_address: str,
+    user_email: str,
+) -> tuple[DocumentRenderContext, str]:
+    """Builds synthetic sample document context for the 6 inbound receiving types (F016)."""
+    org_ctx = OrganizationHeaderContext(
+        name=org_name, code="ORG-01", tax_id=tax_id, logo_base64=None
+    )
+    branch_ctx = BranchHeaderContext(name=branch_name, code=branch_code, address=branch_address)
+    code_upper = doc_code.upper().strip()
+
+    if code_upper == "ARR":
+        st = status_code.upper() if status_code else "SCHEDULED"
+        template_key = "arrival_appointment_v1"
+        item_count = 50 if scenario == "multipage" else 6
+        rows = [
+            {
+                "item_no": str(i + 1),
+                "sku": f"MAT-INB-{(i + 1):03d}",
+                "description": f"Suministro Industrial / Insumo Operativo Tipo #{i + 1}",
+                "ordered_qty": f"{(i + 1) * 150:,.2f}",
+                "unit": "UND" if i % 2 == 0 else "KG",
+                "pallets": str((i % 4) + 1),
+                "weight_kg": f"{(i + 1) * 75.5:,.1f} kg",
+            }
+            for i in range(item_count)
+        ]
+        notes_text = (
+            "El conductor y la cuadrilla deben ingresar con implementos de seguridad completos "
+            "(casco, chaleco reflectivo, calzado de seguridad con puntera de acero). "
+            "Reportar precinto en garita vehicular 15 minutos antes de la ventana asignada."
+        )
+        if scenario == "long_text":
+            notes_text += (
+                " Protocolo de descarga para insumos pesados: El transportista deberá presentar "
+                "la Guía de Remisión Remitente (GTR) y el Certificado de Calidad de Origen antes "
+                "de iniciar la maniobra de acople en el muelle asignado. En caso de lluvia o "
+                "condiciones climáticas adversas, la unidad deberá permanecer encarpada hasta "
+                "la autorización explícita del supervisor de patio."
+            )
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="ARR",
+                type_name="Cita de Llegada / Arribo",
+                display_code=f"PREVIEW-ARR-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Proveedor", "value": "Aceros y Derivados del Pacífico S.A.C."},
+                {
+                    "label": "Empresa de Transporte",
+                    "value": "Transportes & Carga TransAndina E.I.R.L.",
+                },
+                {"label": "Conductor", "value": "Carlos Alberto Mendoza Peña (Lic: Q-44891023)"},
+                {"label": "Placa Tracto / Remolque", "value": "B8Z-912 / T5A-780"},
+                {"label": "Orden de Compra Relacionada", "value": f"PO-{branch_code}-2026-000189"},
+                {"label": "Guía Remitente (GTR)", "value": "T001-0008451"},
+                {"label": "Total Pallets Estimados", "value": "18 Pallets Estándar"},
+                {"label": "Peso Bruto Total", "value": "12,450.00 kg"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Carga y Mercancía Programada para Descarga",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(
+                            key="sku", label="Código SKU", align="left", width="16%"
+                        ),
+                        TableColumnContext(
+                            key="description",
+                            label="Descripción del Producto",
+                            align="left",
+                            width="35%",
+                        ),
+                        TableColumnContext(
+                            key="ordered_qty", label="Cantidad Prog.", align="right", width="14%"
+                        ),
+                        TableColumnContext(key="unit", label="U.M.", align="center", width="8%"),
+                        TableColumnContext(
+                            key="pallets", label="Bultos", align="center", width="8%"
+                        ),
+                        TableColumnContext(
+                            key="weight_kg", label="Peso Est.", align="right", width="14%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "appointment_window": "2026-08-29 de 08:30 a 11:30 (Ventana 3 Horas)",
+                "dock": "Muelle #03 (Carga Pesada)",
+            },
+            notes=notes_text,
+            visual_signature=VisualSignatureContext(
+                signer_name="Ing. Javier Paredes Soto",
+                signer_role="Coordinador de Citas & Patio de Maniobras",
+                signed_at="2026-08-29 07:45:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper == "CPV":
+        st = status_code.upper() if status_code else "INSIDE"
+        template_key = "gate_control_v1"
+        rows = [
+            {
+                "check_no": "1",
+                "item": "Verificación de Identidad y Licencia del Conductor",
+                "standard": "DNI / Licencia vigente y sin infracciones",
+                "result": "CONFORME",
+                "obs": "Conductor Carlos Mendoza verificado en padrón",
+            },
+            {
+                "check_no": "2",
+                "item": "Revisión de Precinto de Seguridad de Origen",
+                "standard": "Precinto intacto con código coincidente con GTR",
+                "result": "CONFORME",
+                "obs": "Precinto Nro: SEC-2026-LIMA-88912 intacto",
+            },
+            {
+                "check_no": "3",
+                "item": "Inspección Visual de Carreta / Furgón",
+                "standard": "Piso seco, sin olores ni contaminación cruzada",
+                "result": "CONFORME",
+                "obs": "Furgón en óptimas condiciones de higiene",
+            },
+            {
+                "check_no": "4",
+                "item": "Documentación Físico/Digital Presentada",
+                "standard": "GTR Proveedor + Guía Transportista + OC",
+                "result": "CONFORME" if scenario != "observed" else "OBSERVADO",
+                "obs": "GTR T001-0008451 conforme"
+                if scenario != "observed"
+                else "Falta copia legible de guía transportista",
+            },
+            {
+                "check_no": "5",
+                "item": "Implementos de Protección Personal (EPP)",
+                "standard": "Casco, chaleco, botas punta de acero",
+                "result": "CONFORME",
+                "obs": "Conductor cuenta con EPP completo",
+            },
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="CPV",
+                type_name="Control de Puerta Vehicular",
+                display_code=f"PREVIEW-CPV-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Cita de Llegada Asociada", "value": f"ARR-{branch_code}-2026-0001"},
+                {"label": "Garita / Punto de Control", "value": "Garita Principal G-01 (Norte)"},
+                {"label": "Oficial de Seguridad", "value": "Sgto. Walter Ramos Quispe"},
+                {"label": "Transportista", "value": "Transportes & Carga TransAndina E.I.R.L."},
+                {"label": "Placa Tracto / Remolque", "value": "B8Z-912 / T5A-780"},
+                {"label": "Nro Precinto Origen", "value": "SEC-2026-LIMA-88912"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Lista de Verificación de Seguridad y Documentos Presentados",
+                    columns=[
+                        TableColumnContext(key="check_no", label="#", align="center", width="5%"),
+                        TableColumnContext(
+                            key="item",
+                            label="Criterio / Inspección de Garita",
+                            align="left",
+                            width="32%",
+                        ),
+                        TableColumnContext(
+                            key="standard", label="Estándar Requerido", align="left", width="28%"
+                        ),
+                        TableColumnContext(
+                            key="result", label="Resultado", align="center", width="13%"
+                        ),
+                        TableColumnContext(
+                            key="obs", label="Observaciones Técnicas", align="left", width="22%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "vehicle_plate": "B8Z-912 / T5A-780",
+                "driver_name": "Carlos Alberto Mendoza Peña",
+                "driver_dni": "44891023",
+                "entry_time": "08:24:15 UTC",
+                "exit_time": "11:45:00 UTC" if st == "EXITED" else "En Operación de Patio",
+            },
+            notes=(
+                "El vehículo ingresó dentro de su ventana de cita autorizada. Se le asigna "
+                "el carril 2 con destino al Muelle #03. Velocidad máxima en patio: 10 km/h."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Walter Ramos Quispe",
+                signer_role="Oficial de Seguridad & Control de Garita",
+                signed_at="2026-08-29 08:25:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper == "REC":
+        st = status_code.upper() if status_code else "COMPLETED"
+        template_key = "receiving_report_v1"
+        item_count = 50 if scenario == "multipage" else 6
+        rows = [
+            {
+                "item_no": str(i + 1),
+                "sku": f"PRD-MAT-{(i + 1):03d}",
+                "description": f"Material Industrial / Insumo Crítico Tipo #{i + 1}",
+                "ordered_qty": f"{(i + 1) * 100:,.2f}",
+                "shipped_qty": f"{(i + 1) * 100:,.2f}",
+                "received_qty": f"{(i + 1) * 100:,.2f}"
+                if scenario != "partial"
+                else f"{(i + 1) * 80:,.2f}",
+                "unit": "UND" if i % 2 == 0 else "KG",
+                "lot_number": f"LOTE-2026-{(i + 1):03d}",
+                "condition": "CONFORME" if scenario != "observed" or i != 1 else "OBSERVADO",
+                "obs": "Empaque y rotulado óptimo"
+                if scenario != "observed" or i != 1
+                else "Empaque con signos de humedad externa",
+            }
+            for i in range(item_count)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="REC",
+                type_name="Acta de Recepción Técnica",
+                display_code=f"PREVIEW-REC-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Orden de Compra", "value": f"PO-{branch_code}-2026-000189"},
+                {"label": "Cita de Llegada", "value": f"ARR-{branch_code}-2026-0001"},
+                {"label": "Proveedor", "value": "Aceros y Derivados del Pacífico S.A.C."},
+                {"label": "Guía Remitente (GTR)", "value": "T001-0008451"},
+                {"label": "Muelle de Descarga", "value": "Muelle #03 (Almacén Central)"},
+                {"label": "Horario Descarga", "value": "08:45 a 10:30 UTC (1h 45m)"},
+                {"label": "Inspector Técnico", "value": "Ing. Marco Tulio Morales"},
+                {
+                    "label": "Modalidad de Recepción",
+                    "value": "Recepción Total"
+                    if scenario != "partial"
+                    else "Recepción Parcial Autorizada",
+                },
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Mercancía Recibida e Inspección Física en Muelle",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="4%"),
+                        TableColumnContext(
+                            key="sku", label="Código SKU", align="left", width="13%"
+                        ),
+                        TableColumnContext(
+                            key="description",
+                            label="Descripción del Producto",
+                            align="left",
+                            width="27%",
+                        ),
+                        TableColumnContext(
+                            key="ordered_qty", label="Ordenado", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="received_qty", label="Recibido", align="right", width="10%"
+                        ),
+                        TableColumnContext(key="unit", label="U.M.", align="center", width="6%"),
+                        TableColumnContext(
+                            key="lot_number", label="Nro Lote", align="center", width="12%"
+                        ),
+                        TableColumnContext(
+                            key="condition", label="Condición", align="center", width="9%"
+                        ),
+                        TableColumnContext(
+                            key="obs", label="Observaciones", align="left", width="9%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "technical_verdict": "CONFORM" if scenario != "observed" else "OBSERVED",
+                "inspected_packages": "18 Pallets (100% Muestreado)",
+            },
+            notes=(
+                "Se certifica que la mercancía detallada fue descargada en presencia "
+                "del transportista y personal técnico. Los conteos y pesos coinciden."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Ing. Marco Tulio Morales",
+                signer_role="Supervisor de Recepción & Calidad en Almacén",
+                signed_at="2026-08-29 10:45:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper == "GRN":
+        st = status_code.upper() if status_code else "ISSUED"
+        template_key = "goods_receipt_v1"
+        item_count = 50 if scenario == "multipage" else 6
+        rows = [
+            {
+                "item_no": str(i + 1),
+                "sku": f"PRD-MAT-{(i + 1):03d}",
+                "description": f"Material Industrial / Insumo Crítico Tipo #{i + 1}",
+                "accepted_qty": f"{(i + 1) * 100:,.2f}",
+                "unit": "UND" if i % 2 == 0 else "KG",
+                "lot_number": f"LOTE-2026-{(i + 1):03d}",
+                "location": f"RACK-{(i % 5) + 1:02d}-N{(i % 3) + 1:02d}",
+                "quality_status": "ACEPTADO",
+            }
+            for i in range(item_count)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="GRN",
+                type_name="Guía de Ingreso a Almacén",
+                display_code=f"PREVIEW-GRN-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Acta de Recepción Relacionada", "value": f"REC-{branch_code}-2026-0001"},
+                {"label": "Orden de Compra", "value": f"PO-{branch_code}-2026-000189"},
+                {"label": "Proveedor", "value": "Aceros y Derivados del Pacífico S.A.C."},
+                {"label": "Guía Remitente (GTR)", "value": "T001-0008451"},
+                {
+                    "label": "Almacén de Destino",
+                    "value": f"Almacén Central Materias Primas ({branch_code})",
+                },
+                {"label": "Fecha / Hora Ingreso", "value": "2026-08-29 11:00:00 UTC"},
+                {"label": "Responsable de Ingreso", "value": "Manuel Antonio Benítez Cruz"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Artículos Aceptados para Ingreso a Almacén",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(
+                            key="sku", label="Código SKU", align="left", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="description",
+                            label="Descripción del Producto",
+                            align="left",
+                            width="33%",
+                        ),
+                        TableColumnContext(
+                            key="accepted_qty", label="Cant. Aceptada", align="right", width="13%"
+                        ),
+                        TableColumnContext(key="unit", label="U.M.", align="center", width="7%"),
+                        TableColumnContext(
+                            key="lot_number", label="Lote", align="center", width="12%"
+                        ),
+                        TableColumnContext(
+                            key="location", label="Ubicación Asignada", align="center", width="15%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes=(
+                "El presente documento sustenta el ingreso físico oficial a almacén. "
+                "Queda registrado en el archivo documental inmutable del sistema."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Manuel Antonio Benítez Cruz",
+                signer_role="Jefe de Almacén General",
+                signed_at="2026-08-29 11:15:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper == "RDIFF":
+        st = status_code.upper() if status_code else "OPEN"
+        template_key = "receiving_difference_v1"
+        item_count = 25 if scenario == "multipage" else 4
+        rows = [
+            {
+                "item_no": "1",
+                "sku": "MAT-LAM-001",
+                "description": "Plancha de Acero Laminado 1/2 pulgada",
+                "expected_qty": "200.00",
+                "received_qty": "180.00",
+                "difference_qty": "-20.00",
+                "diff_type": "FALTANTE (SHORTAGE)",
+                "severity": "ALTA",
+                "obs": "Faltante de 20 unidades según bultos precintados",
+            },
+            {
+                "item_no": "2",
+                "sku": "MAT-PER-004",
+                "description": "Perfil Estructural Cuadrado 50x50mm",
+                "expected_qty": "100.00",
+                "received_qty": "100.00",
+                "difference_qty": "0.00",
+                "diff_type": "DAÑADO (DAMAGED)",
+                "severity": "MEDIA",
+                "obs": "5 unidades con deformación severa por amarre",
+            },
+            {
+                "item_no": "3",
+                "sku": "MAT-PNT-012",
+                "description": "Pintura Epóxica Anticorrosiva Gris (Galones)",
+                "expected_qty": "50.00",
+                "received_qty": "55.00",
+                "difference_qty": "+5.00",
+                "diff_type": "SOBRANTE (EXCESS)",
+                "severity": "BAJA",
+                "obs": "5 galones adicionales no solicitados en la OC",
+            },
+            {
+                "item_no": "4",
+                "sku": "MAT-DOC-000",
+                "description": "Certificado de Análisis Metalográfico de Lote",
+                "expected_qty": "1.00",
+                "received_qty": "0.00",
+                "difference_qty": "-1.00",
+                "diff_type": "DOCUMENTAL",
+                "severity": "ALTA",
+                "obs": "Falta Certificado de Calidad del lote L-9921",
+            },
+        ]
+        if scenario == "multipage":
+            for i in range(4, item_count):
+                rows.append(
+                    {
+                        "item_no": str(i + 1),
+                        "sku": f"MAT-DISC-{(i + 1):03d}",
+                        "description": f"Artículo con Discrepancia de Descarga #{i + 1}",
+                        "expected_qty": f"{(i + 1) * 10:,.2f}",
+                        "received_qty": f"{(i + 1) * 8:,.2f}",
+                        "difference_qty": f"-{(i + 1) * 2:,.2f}",
+                        "diff_type": "FALTANTE",
+                        "severity": "MEDIA",
+                        "obs": f"Discrepancia en bulto #{i + 1}",
+                    }
+                )
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="RDIFF",
+                type_name="Acta de Diferencias de Recepción",
+                display_code=f"PREVIEW-RDIFF-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Acta de Recepción Técnica", "value": f"REC-{branch_code}-2026-0001"},
+                {"label": "Orden de Compra", "value": f"PO-{branch_code}-2026-000189"},
+                {"label": "Proveedor", "value": "Aceros y Derivados del Pacífico S.A.C."},
+                {"label": "Transportista", "value": "Transportes & Carga TransAndina E.I.R.L."},
+                {"label": "Conductor Presente", "value": "Carlos Alberto Mendoza Peña"},
+                {"label": "Total Discrepancias", "value": f"{len(rows)} Ítems Observados"},
+                {
+                    "label": "Estado de Resolución",
+                    "value": "Pendiente de Notificación al Proveedor",
+                },
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Discrepancias y Faltantes Registrados en Descarga",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="4%"),
+                        TableColumnContext(
+                            key="sku", label="Código SKU", align="left", width="12%"
+                        ),
+                        TableColumnContext(
+                            key="description",
+                            label="Descripción del Producto",
+                            align="left",
+                            width="26%",
+                        ),
+                        TableColumnContext(
+                            key="expected_qty", label="Esperado", align="right", width="9%"
+                        ),
+                        TableColumnContext(
+                            key="received_qty", label="Recibido", align="right", width="9%"
+                        ),
+                        TableColumnContext(
+                            key="difference_qty", label="Diferencia", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="diff_type", label="Tipo Diferencia", align="center", width="14%"
+                        ),
+                        TableColumnContext(
+                            key="obs", label="Detalle / Hallazgo", align="left", width="16%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes=(
+                "El presente documento certifica que el transportista y receptor han "
+                "verificado diferencias. Se traslada a Compras para reclamo formal."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Carlos Mendoza Peña (Conductor) / Marco Morales (Almacén)",
+                signer_role="Conformidad Conjunta de Constatación de Diferencias",
+                signed_at="2026-08-29 11:30:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper == "NC":
+        st = status_code.upper() if status_code else "ISSUED"
+        template_key = "non_conformity_v1"
+        rows = [
+            {
+                "finding_no": "1",
+                "category": "CALIDAD DE PRODUCTO",
+                "description": (
+                    "Presencia de óxido y porosidad en lote de planchas laminadas L-9921"
+                ),
+                "evidence": "FOT-20260829-01.jpg (Muestreo 10 planchas)",
+                "severity": "CRÍTICA",
+                "disposition": "DEVOLUCIÓN TOTAL AL PROVEEDOR",
+            },
+            {
+                "finding_no": "2",
+                "category": "EMPAQUE Y ROTULADO",
+                "description": (
+                    "Falta de etiquetas de identificación con código de barras en 30 bultos"
+                ),
+                "evidence": "FOT-20260829-02.jpg",
+                "severity": "MODERADA",
+                "disposition": "RE-ETIQUETADO CON CARGO A PROVEEDOR",
+            },
+            {
+                "finding_no": "3",
+                "category": "DOCUMENTAL",
+                "description": (
+                    "Certificado de Calidad de Origen no coincide con número de colada entregado"
+                ),
+                "evidence": "DOC-CERT-COLADA-REF.pdf",
+                "severity": "ALTA",
+                "disposition": "SUBSANACIÓN EN PLAZO DE 24 HORAS",
+            },
+        ]
+        if scenario == "multipage":
+            for i in range(3, 20):
+                rows.append(
+                    {
+                        "finding_no": str(i + 1),
+                        "category": "CALIDAD",
+                        "description": f"Desviación técnica en parámetro dimensional #{i + 1}",
+                        "evidence": f"EVIDENCIA-{(i + 1):02d}.pdf",
+                        "severity": "MODERADA",
+                        "disposition": "CUARENTENA PREVENTIVA",
+                    }
+                )
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="NC",
+                type_name="Reporte de No Conformidad",
+                display_code=f"PREVIEW-NC-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Acta de Recepción Origen", "value": f"REC-{branch_code}-2026-0001"},
+                {"label": "Orden de Compra", "value": f"PO-{branch_code}-2026-000189"},
+                {"label": "Proveedor Observado", "value": "Aceros y Derivados del Pacífico S.A.C."},
+                {"label": "Lote Afectado", "value": "LOTE-2026-001 (Planchas Laminadas)"},
+                {
+                    "label": "Severidad Global",
+                    "value": "CRÍTICA" if scenario == "critical" else "MODERADA",
+                },
+                {
+                    "label": "Responsable de Calidad",
+                    "value": "Ing. Patricia Del Solar (QA Manager)",
+                },
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Hallazgos y Desviaciones Técnicas Identificadas",
+                    columns=[
+                        TableColumnContext(key="finding_no", label="#", align="center", width="5%"),
+                        TableColumnContext(
+                            key="category", label="Categoría", align="center", width="18%"
+                        ),
+                        TableColumnContext(
+                            key="description",
+                            label="Descripción del Hallazgo / Desviación",
+                            align="left",
+                            width="37%",
+                        ),
+                        TableColumnContext(
+                            key="evidence", label="Evidencia", align="center", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="severity", label="Severidad", align="center", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="disposition",
+                            label="Disposición Propuesta",
+                            align="left",
+                            width="15%",
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "severity": "CRÍTICA" if scenario == "critical" else "MODERADA",
+            },
+            notes=(
+                "El proveedor debe remitir su plan de acción correctiva (8D / CAPA) "
+                "en un plazo no mayor a 3 días hábiles. El material queda bloqueado en "
+                "zona de cuarentena hasta su resolución."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Ing. Patricia Del Solar",
+                signer_role="Jefa de Aseguramiento de Calidad (QA/QC)",
+                signed_at="2026-08-29 12:00:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Código documental de ingreso/recepción no soportado: {doc_code}. "
+                "Soportados: ARR, CPV, REC, GRN, RDIFF, NC."
+            ),
+        )
+
+
+@router.post(
+    "/document-renderer/receiving/{doc_code}/sample",
+    summary="Generate canonical sample preview for receiving document types",
+    dependencies=[Depends(require_permission("document_templates.preview"))],
+)
+def render_receiving_sample_document(
+    doc_code: str,
+    scenario: str = Query(
+        "basic", description="Scenario: basic, multipage, long_text, observed, partial, critical"
+    ),
+    status_code: Optional[str] = Query(
+        None, description="Document status (e.g. SCHEDULED, INSIDE, COMPLETED, ISSUED, OPEN)"
+    ),
+    format: str = Query("pdf", description="Output format: pdf or html"),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    db: Session = Depends(get_db),
+):
+    """Renders canonical synthetic preview for inbound receiving documents (F016)."""
+    branch_name = "Sede Principal Lima"
+    branch_code = "LIM"
+    org_name = "Organización Logística Integral del Perú"
+    tax_id = "20100012345"
+    branch_address = "Av. Industrial 456, Parque Logístico, Callao, Lima"
+
+    if principal.organization_id:
+        from app.modules.organization.models import Branch, Organization
+
+        org = db.query(Organization).filter(Organization.id == principal.organization_id).first()
+        if org:
+            org_name = org.name
+        branch = (
+            db.query(Branch).filter(Branch.organization_id == principal.organization_id).first()
+        )
+        if branch:
+            branch_name = branch.name
+            branch_code = branch.code
+            if branch.location and branch.location.address_line1:
+                branch_address = branch.location.address_line1
+
+    ctx, template_key = build_receiving_sample_context(
+        doc_code=doc_code,
+        scenario=scenario,
+        status_code=status_code,
+        org_name=org_name,
+        tax_id=tax_id,
+        branch_name=branch_name,
+        branch_code=branch_code,
+        branch_address=branch_address,
+        user_email=principal.email,
+    )
+
+    service = DocumentRenderingService()
+    pdf_bytes, html_content, snapshot_hash, pdf_hash = service.process_and_render(
+        context=ctx,
+        template_key=template_key,
+    )
+
+    headers = {
+        "X-Snapshot-Hash": snapshot_hash,
+        "X-Pdf-Hash": pdf_hash,
+        "X-Template-Key": template_key,
+        "X-Document-Type": doc_code.upper(),
+        "X-Renderer-Name": "WeasyPrint",
+        "X-Renderer-Version": "69.0",
+    }
+
+    if format.lower() == "html":
+        return HTMLResponse(content=html_content, headers=headers)
+
+    filename = f"{ctx.document.display_code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            **headers,
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )
