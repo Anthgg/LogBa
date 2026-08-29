@@ -359,8 +359,17 @@ def run_seed() -> None:
             db.query(StepUpChallenge).filter(StepUpChallenge.user_id == u.id).delete()
             db.query(UserMfaFactor).filter(UserMfaFactor.user_id == u.id).delete()
 
-        # --- 5. Canonical Document Catalog ---
+        # --- 5. Canonical Document Catalog & Series Cleanup (Test/Dev only) ---
+        from app.modules.documents.series_models import (
+            DocumentNumberReservation,
+            DocumentSeries,
+            DocumentSeriesNumber,
+        )
         from app.modules.documents.service import DocumentCatalogService
+
+        db.query(DocumentSeriesNumber).delete()
+        db.query(DocumentNumberReservation).delete()
+        db.query(DocumentSeries).delete()
 
         doc_stats = DocumentCatalogService.load_canonical_catalog(db)
         print(f"Canonical Document Catalog synchronized: {doc_stats}")

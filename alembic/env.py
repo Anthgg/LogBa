@@ -3,6 +3,7 @@ from logging.config import fileConfig
 
 import app.modules.auth.models  # noqa: F401
 import app.modules.documents.models  # noqa: F401
+import app.modules.documents.series_models  # noqa: F401
 
 # Import all models to ensure metadata is fully populated
 import app.modules.organization.models  # noqa: F401
