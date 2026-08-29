@@ -1,0 +1,51 @@
+name: Backend Deploy to Cloud Run
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'alembic/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy Backend to Cloud Run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker southamerica-west1-docker.pkg.dev
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_TAG="southamerica-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-source-deploy/logba-api:${{ github.sha }}"
+          docker build -t "$IMAGE_TAG" -t "southamerica-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-source-deploy/logba-api:latest" .
+          docker push "$IMAGE_TAG"
+          docker push "southamerica-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-source-deploy/logba-api:latest"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy logba-api \
+            --image "southamerica-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/cloud-run-source-deploy/logba-api:${{ github.sha }}" \
+            --region southamerica-west1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "APP_NAME=Sistema Logistico Integral,APP_ENV=production,APP_DEBUG=false,SESSION_COOKIE_SECURE=true,SESSION_COOKIE_SAMESITE=none" \
+            --set-secrets "DATABASE_URL=logba-database-url:latest,CSRF_SIGNING_SECRET=logba-csrf-signing-secret:latest,MFA_ENCRYPTION_KEY=logba-mfa-encryption-key:latest"

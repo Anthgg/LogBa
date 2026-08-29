@@ -1,3 +1,5 @@
+import logging
+import time
 import uuid
 from typing import Callable, List, cast
 
@@ -8,11 +10,14 @@ from app.api.logistics.router import router as logistics_router
 from app.api.routes.health import router as health_router
 from app.api.routes.system import router as system_router
 from app.core.config import get_settings
+from app.core.logging import setup_logging
 from app.modules.auth.mfa_router import mfa_router
 from app.modules.auth.router import auth_router
 from app.shared.errors.handlers import register_error_handlers
 
 settings = get_settings()
+setup_logging()
+logger = logging.getLogger("app.http")
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -38,7 +43,7 @@ if cors_origins:
     )
 
 
-# Correlation ID Middleware
+# Correlation ID & Request Logging Middleware
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next: Callable) -> Response:
     raw_correlation = request.headers.get("X-Correlation-ID")
@@ -48,8 +53,24 @@ async def correlation_id_middleware(request: Request, call_next: Callable) -> Re
         correlation_id = uuid.uuid4()
 
     request.state.correlation_id = correlation_id
+    start_time = time.time()
+
     response = await call_next(request)
+    duration_ms = round((time.time() - start_time) * 1000, 2)
+
     response.headers["X-Correlation-ID"] = str(correlation_id)
+
+    # Structured request logging
+    logger.info(
+        f"{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)",
+        extra={
+            "correlation_id": str(correlation_id),
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
     return response
 
 
