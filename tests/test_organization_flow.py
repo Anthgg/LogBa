@@ -4,16 +4,32 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.modules.auth.csrf import generate_csrf_token
 from app.scripts import seed_demo
 
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    c = TestClient(app)
+    seed_demo.run_seed()
+    csrf = generate_csrf_token()
+    login_res = c.post(
+        "/api/auth/login",
+        json={
+            "email": "gerencia.demo@logistica.local",
+            "password": "DemoLogistics2026!Secure",
+        },
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert login_res.status_code == 200
+    return c
+
+
+def csrf_headers():
+    return {"X-CSRF-Token": generate_csrf_token()}
 
 
 def test_structure_endpoint(client: TestClient):
-    seed_demo.run_seed()
     response = client.get("/api/logistics/structure")
     assert response.status_code == 200
     data = response.json()
@@ -32,6 +48,7 @@ def test_organization_crud_lifecycle(client: TestClient):
     create_res = client.post(
         "/api/logistics/organizations",
         json={"code": unique_code, "name": "Test Lifecycle Org", "is_active": True},
+        headers=csrf_headers(),
     )
     assert create_res.status_code == 201
     org_data = create_res.json()
@@ -41,6 +58,7 @@ def test_organization_crud_lifecycle(client: TestClient):
     dup_res = client.post(
         "/api/logistics/organizations",
         json={"code": unique_code, "name": "Duplicate Code Org"},
+        headers=csrf_headers(),
     )
     assert dup_res.status_code == 409
     assert dup_res.json()["code"] == "DUPLICATE_ORGANIZATION_CODE"
@@ -54,12 +72,16 @@ def test_organization_crud_lifecycle(client: TestClient):
     patch_res = client.patch(
         f"/api/logistics/organizations/{org_id}",
         json={"name": "Updated Org Name"},
+        headers=csrf_headers(),
     )
     assert patch_res.status_code == 200
     assert patch_res.json()["name"] == "Updated Org Name"
 
     # Delete Organization
-    del_res = client.delete(f"/api/logistics/organizations/{org_id}")
+    del_res = client.delete(
+        f"/api/logistics/organizations/{org_id}",
+        headers=csrf_headers(),
+    )
     assert del_res.status_code == 204
 
     # Confirm Not Found (404)
@@ -73,6 +95,7 @@ def test_branch_and_warehouse_dependency_gates(client: TestClient):
     org_res = client.post(
         "/api/logistics/organizations",
         json={"code": org_code, "name": "Dependency Gate Org"},
+        headers=csrf_headers(),
     )
     org_id = org_res.json()["id"]
 
@@ -88,12 +111,16 @@ def test_branch_and_warehouse_dependency_gates(client: TestClient):
                 "country_code": "PE",
             },
         },
+        headers=csrf_headers(),
     )
     assert branch_res.status_code == 201
     branch_id = branch_res.json()["id"]
 
     # Try to delete Org while it has Branch -> blocked with 409
-    org_del_res = client.delete(f"/api/logistics/organizations/{org_id}")
+    org_del_res = client.delete(
+        f"/api/logistics/organizations/{org_id}",
+        headers=csrf_headers(),
+    )
     assert org_del_res.status_code == 409
     assert org_del_res.json()["code"] == "ORGANIZATION_HAS_BRANCHES"
 
@@ -105,25 +132,38 @@ def test_branch_and_warehouse_dependency_gates(client: TestClient):
             "name": "Dependency Warehouse",
             "use_branch_location": True,
         },
+        headers=csrf_headers(),
     )
     assert wh_res.status_code == 201
     wh_id = wh_res.json()["id"]
 
     # Try to delete Branch while it has Warehouse -> blocked with 409
-    br_del_res = client.delete(f"/api/logistics/branches/{branch_id}")
+    br_del_res = client.delete(
+        f"/api/logistics/branches/{branch_id}",
+        headers=csrf_headers(),
+    )
     assert br_del_res.status_code == 409
     assert br_del_res.json()["code"] == "BRANCH_HAS_WAREHOUSES"
 
     # Clean up warehouse first
-    del_wh = client.delete(f"/api/logistics/warehouses/{wh_id}")
+    del_wh = client.delete(
+        f"/api/logistics/warehouses/{wh_id}",
+        headers=csrf_headers(),
+    )
     assert del_wh.status_code == 204
 
     # Now branch can be deleted
-    del_br = client.delete(f"/api/logistics/branches/{branch_id}")
+    del_br = client.delete(
+        f"/api/logistics/branches/{branch_id}",
+        headers=csrf_headers(),
+    )
     assert del_br.status_code == 204
 
     # Now org can be deleted
-    del_org = client.delete(f"/api/logistics/organizations/{org_id}")
+    del_org = client.delete(
+        f"/api/logistics/organizations/{org_id}",
+        headers=csrf_headers(),
+    )
     assert del_org.status_code == 204
 
 
@@ -131,6 +171,7 @@ def test_coordinate_validation_bounds(client: TestClient):
     org_res = client.post(
         "/api/logistics/organizations",
         json={"code": f"GEO-ORG-{uuid.uuid4().hex[:6]}", "name": "Geo Org"},
+        headers=csrf_headers(),
     )
     org_id = org_res.json()["id"]
 
@@ -146,6 +187,7 @@ def test_coordinate_validation_bounds(client: TestClient):
                 "latitude": -95.0,
             },
         },
+        headers=csrf_headers(),
     )
     assert bad_lat.status_code == 422
     assert bad_lat.json()["code"] == "REQUEST_VALIDATION_ERROR"
@@ -162,12 +204,16 @@ def test_coordinate_validation_bounds(client: TestClient):
                 "longitude": 200.0,
             },
         },
+        headers=csrf_headers(),
     )
     assert bad_lon.status_code == 422
     assert bad_lon.json()["code"] == "REQUEST_VALIDATION_ERROR"
 
     # Clean up org
-    client.delete(f"/api/logistics/organizations/{org_id}")
+    client.delete(
+        f"/api/logistics/organizations/{org_id}",
+        headers=csrf_headers(),
+    )
 
 
 def test_production_seed_protection(monkeypatch):

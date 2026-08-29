@@ -2,6 +2,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.connection import SessionLocal
+from app.modules.auth.models import User
+from app.modules.auth.password import hash_password
+from app.modules.auth.repository import UserRepository, UserRoleRepository
 from app.modules.organization.models import (
     Branch,
     OperationalLocation,
@@ -40,6 +43,8 @@ def run_seed() -> None:
     role_repo = RoleRepository()
     perm_repo = PermissionRepository()
     role_perm_repo = RolePermissionRepository()
+    user_repo = UserRepository()
+    user_role_repo = UserRoleRepository()
 
     try:
         # --- 1. Canonical Permissions Catalog ---
@@ -141,10 +146,12 @@ def run_seed() -> None:
             baseline_codes = CANONICAL_ROLE_BASELINES.get(code, [])
             if baseline_codes:
                 assigned_existing = role_perm_repo.list_permissions_by_role(db, sys_role.id)
-                if not assigned_existing:
+                assigned_existing_codes = {p.code for p in assigned_existing}
+                missing_codes = [c for c in baseline_codes if c not in assigned_existing_codes]
+                if missing_codes or len(assigned_existing) != len(baseline_codes):
                     perms = perm_repo.list_by_codes(db, baseline_codes)
                     role_perm_repo.set_role_permissions(db, sys_role.id, [p.id for p in perms])
-                    print(f"Assigned {len(perms)} baseline permissions to {code}")
+                    print(f"Updated {len(perms)} baseline permissions to {code}")
 
         # --- 3. Demo Organization ---
         demo_org = org_repo.get_by_code(db, "DEMO-ORG-001")
@@ -295,6 +302,51 @@ def run_seed() -> None:
             )
             wh_repo.create(db, wh_aqp)
             print(f"Demo Warehouse created: {wh_aqp.code} (shared location)")
+
+        # --- 7. Demo Realistic Users (F008) ---
+        demo_users_spec = [
+            (
+                "gerencia.demo@logistica.local",
+                "Gerencia General Demo",
+                "MANAGEMENT",
+            ),
+            (
+                "almacen.demo@logistica.local",
+                "Operador Almacén Demo",
+                "WAREHOUSE",
+            ),
+            (
+                "auditor.demo@logistica.local",
+                "Auditor de Control Demo",
+                "AUDITOR",
+            ),
+        ]
+
+        demo_password = settings.DEMO_USER_PASSWORD or "DemoLogistics2026!Secure"
+        demo_password_hash = hash_password(demo_password)
+
+        for email, display_name, role_code in demo_users_spec:
+            norm_email = email.strip().lower()
+            u = user_repo.get_by_email_normalized(db, norm_email)
+            if not u:
+                u = User(
+                    organization_id=demo_org.id,
+                    email=email,
+                    email_normalized=norm_email,
+                    display_name=display_name,
+                    password_hash=demo_password_hash,
+                    is_active=True,
+                    is_test_data=True,
+                )
+                user_repo.create(db, u)
+                db.flush()
+                print(f"Demo User created: {email}")
+
+            # Assign Role
+            role = role_repo.get_by_code(db, role_code, organization_id=None)
+            if role:
+                user_role_repo.set_user_roles(db, u.id, [role.id])
+                print(f"Assigned role {role_code} to {email}")
 
         db.commit()
         print("Demo seed completed successfully!")

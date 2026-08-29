@@ -5,6 +5,11 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.connection import get_db
+from app.modules.auth.dependencies import (
+    get_audit_context,
+    require_permission,
+    validate_csrf,
+)
 from app.modules.organization.schemas import (
     BranchCreate,
     BranchResponse,
@@ -33,7 +38,6 @@ from app.modules.organization.service import (
     StructureService,
     WarehouseService,
 )
-from app.shared.audit.context import get_audit_context
 from app.shared.audit.contracts import AuditContext
 
 router = APIRouter()
@@ -50,6 +54,7 @@ perm_service = PermissionService()
     "/structure",
     response_model=StructureResponse,
     summary="Get complete organizational and warehouse tree",
+    dependencies=[Depends(require_permission("organization.read"))],
 )
 def get_structure(db: Session = Depends(get_db)) -> StructureResponse:
     return struct_service.get_structure(db)
@@ -61,6 +66,7 @@ def get_structure(db: Session = Depends(get_db)) -> StructureResponse:
     response_model=OrganizationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create organization",
+    dependencies=[Depends(require_permission("organization.create")), Depends(validate_csrf)],
 )
 def create_organization(
     data: OrganizationCreate,
@@ -75,6 +81,7 @@ def create_organization(
     "/organizations",
     response_model=List[OrganizationResponse],
     summary="List organizations",
+    dependencies=[Depends(require_permission("organization.read"))],
 )
 def list_organizations(
     db: Session = Depends(get_db),
@@ -87,6 +94,7 @@ def list_organizations(
     "/organizations/{org_id}",
     response_model=OrganizationResponse,
     summary="Get organization by ID",
+    dependencies=[Depends(require_permission("organization.read"))],
 )
 def get_organization(org_id: uuid.UUID, db: Session = Depends(get_db)) -> OrganizationResponse:
     res = org_service.get_organization(db, org_id)
@@ -97,6 +105,7 @@ def get_organization(org_id: uuid.UUID, db: Session = Depends(get_db)) -> Organi
     "/organizations/{org_id}",
     response_model=OrganizationResponse,
     summary="Update organization",
+    dependencies=[Depends(require_permission("organization.update")), Depends(validate_csrf)],
 )
 def update_organization(
     org_id: uuid.UUID,
@@ -112,6 +121,7 @@ def update_organization(
     "/organizations/{org_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete organization",
+    dependencies=[Depends(require_permission("organization.delete")), Depends(validate_csrf)],
 )
 def delete_organization(
     org_id: uuid.UUID,
@@ -127,6 +137,7 @@ def delete_organization(
     response_model=BranchResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create branch under organization",
+    dependencies=[Depends(require_permission("branch.create")), Depends(validate_csrf)],
 )
 def create_branch(
     org_id: uuid.UUID,
@@ -142,6 +153,7 @@ def create_branch(
     "/organizations/{org_id}/branches",
     response_model=List[BranchResponse],
     summary="List branches of an organization",
+    dependencies=[Depends(require_permission("branch.read"))],
 )
 def list_branches_by_organization(
     org_id: uuid.UUID, db: Session = Depends(get_db)
@@ -154,6 +166,7 @@ def list_branches_by_organization(
     "/branches/{branch_id}",
     response_model=BranchResponse,
     summary="Get branch by ID",
+    dependencies=[Depends(require_permission("branch.read"))],
 )
 def get_branch(branch_id: uuid.UUID, db: Session = Depends(get_db)) -> BranchResponse:
     res = branch_service.get_branch(db, branch_id)
@@ -164,6 +177,7 @@ def get_branch(branch_id: uuid.UUID, db: Session = Depends(get_db)) -> BranchRes
     "/branches/{branch_id}",
     response_model=BranchResponse,
     summary="Update branch",
+    dependencies=[Depends(require_permission("branch.update")), Depends(validate_csrf)],
 )
 def update_branch(
     branch_id: uuid.UUID,
@@ -179,6 +193,7 @@ def update_branch(
     "/branches/{branch_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete branch",
+    dependencies=[Depends(require_permission("branch.delete")), Depends(validate_csrf)],
 )
 def delete_branch(
     branch_id: uuid.UUID,
@@ -194,6 +209,7 @@ def delete_branch(
     response_model=WarehouseResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create warehouse under branch",
+    dependencies=[Depends(require_permission("warehouse.create")), Depends(validate_csrf)],
 )
 def create_warehouse(
     branch_id: uuid.UUID,
@@ -209,6 +225,7 @@ def create_warehouse(
     "/branches/{branch_id}/warehouses",
     response_model=List[WarehouseResponse],
     summary="List warehouses of a branch",
+    dependencies=[Depends(require_permission("warehouse.read"))],
 )
 def list_warehouses_by_branch(
     branch_id: uuid.UUID, db: Session = Depends(get_db)
@@ -221,6 +238,7 @@ def list_warehouses_by_branch(
     "/warehouses/{warehouse_id}",
     response_model=WarehouseResponse,
     summary="Get warehouse by ID",
+    dependencies=[Depends(require_permission("warehouse.read"))],
 )
 def get_warehouse(warehouse_id: uuid.UUID, db: Session = Depends(get_db)) -> WarehouseResponse:
     res = wh_service.get_warehouse(db, warehouse_id)
@@ -231,6 +249,7 @@ def get_warehouse(warehouse_id: uuid.UUID, db: Session = Depends(get_db)) -> War
     "/warehouses/{warehouse_id}",
     response_model=WarehouseResponse,
     summary="Update warehouse",
+    dependencies=[Depends(require_permission("warehouse.update")), Depends(validate_csrf)],
 )
 def update_warehouse(
     warehouse_id: uuid.UUID,
@@ -246,6 +265,7 @@ def update_warehouse(
     "/warehouses/{warehouse_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete warehouse",
+    dependencies=[Depends(require_permission("warehouse.delete")), Depends(validate_csrf)],
 )
 def delete_warehouse(
     warehouse_id: uuid.UUID,
@@ -260,6 +280,7 @@ def delete_warehouse(
     "/permissions/endpoint-matrix",
     response_model=List[EndpointPermissionMappingResponse],
     summary="Get canonical REST endpoint-to-permission security matrix",
+    dependencies=[Depends(require_permission("permissions.read"))],
 )
 def get_endpoint_matrix() -> List[EndpointPermissionMappingResponse]:
     return perm_service.get_endpoint_matrix()
@@ -269,6 +290,7 @@ def get_endpoint_matrix() -> List[EndpointPermissionMappingResponse]:
     "/permissions",
     response_model=List[PermissionResponse],
     summary="List action-based permissions catalog",
+    dependencies=[Depends(require_permission("permissions.read"))],
 )
 def list_permissions(
     category: Optional[str] = Query(None, description="Filter by permission category"),
@@ -282,6 +304,7 @@ def list_permissions(
     "/permissions/{permission_id}",
     response_model=PermissionResponse,
     summary="Get permission by ID",
+    dependencies=[Depends(require_permission("permissions.read"))],
 )
 def get_permission(permission_id: uuid.UUID, db: Session = Depends(get_db)) -> PermissionResponse:
     res = perm_service.get_permission(db, permission_id)
@@ -293,6 +316,7 @@ def get_permission(permission_id: uuid.UUID, db: Session = Depends(get_db)) -> P
     "/roles/matrix",
     response_model=RoleMatrixResponse,
     summary="Get canonical roles responsibilities and SoD segregation matrix",
+    dependencies=[Depends(require_permission("roles.read"))],
 )
 def get_role_matrix() -> RoleMatrixResponse:
     return role_service.get_matrix()
@@ -303,6 +327,7 @@ def get_role_matrix() -> RoleMatrixResponse:
     response_model=RoleResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create role",
+    dependencies=[Depends(require_permission("roles.create")), Depends(validate_csrf)],
 )
 def create_role(
     data: RoleCreate,
@@ -317,6 +342,7 @@ def create_role(
     "/roles",
     response_model=List[RoleResponse],
     summary="List roles (system and organization-scoped)",
+    dependencies=[Depends(require_permission("roles.read"))],
 )
 def list_roles(
     organization_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)
@@ -329,6 +355,7 @@ def list_roles(
     "/roles/{role_id}",
     response_model=RoleResponse,
     summary="Get role by ID",
+    dependencies=[Depends(require_permission("roles.read"))],
 )
 def get_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> RoleResponse:
     res = role_service.get_role(db, role_id)
@@ -339,6 +366,7 @@ def get_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> RoleResponse:
     "/roles/{role_id}",
     response_model=RoleResponse,
     summary="Update role",
+    dependencies=[Depends(require_permission("roles.update")), Depends(validate_csrf)],
 )
 def update_role(
     role_id: uuid.UUID,
@@ -354,6 +382,7 @@ def update_role(
     "/roles/{role_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete role",
+    dependencies=[Depends(require_permission("roles.delete")), Depends(validate_csrf)],
 )
 def delete_role(
     role_id: uuid.UUID,
@@ -367,6 +396,7 @@ def delete_role(
     "/roles/{role_id}/permissions",
     response_model=RoleEffectivePermissionsResponse,
     summary="Get effective action permissions and SoD warnings for a role",
+    dependencies=[Depends(require_permission("permissions.read"))],
 )
 def get_role_permissions(
     role_id: uuid.UUID, db: Session = Depends(get_db)
@@ -378,6 +408,7 @@ def get_role_permissions(
     "/roles/{role_id}/permissions",
     response_model=RoleEffectivePermissionsResponse,
     summary="Assign/replace action permissions for a role",
+    dependencies=[Depends(require_permission("permissions.assign")), Depends(validate_csrf)],
 )
 def assign_role_permissions(
     role_id: uuid.UUID,

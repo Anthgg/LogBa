@@ -8,6 +8,7 @@ from app.api.logistics.router import router as logistics_router
 from app.api.routes.health import router as health_router
 from app.api.routes.system import router as system_router
 from app.core.config import get_settings
+from app.modules.auth.router import auth_router
 from app.shared.errors.handlers import register_error_handlers
 
 settings = get_settings()
@@ -57,4 +58,5 @@ register_error_handlers(app)
 # Include modular API routers
 app.include_router(health_router)
 app.include_router(system_router)
+app.include_router(auth_router)
 app.include_router(logistics_router)

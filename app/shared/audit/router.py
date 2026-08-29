@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db.connection import get_db
+from app.modules.auth.dependencies import require_permission
 from app.shared.audit.schemas import (
     AuditEventDetailResponse,
     AuditListResponse,
@@ -20,6 +21,7 @@ audit_service = AuditService()
     "/export",
     summary="Export audit events log as CSV",
     response_class=Response,
+    dependencies=[Depends(require_permission("audit.export"))],
 )
 def export_audit_events_csv(
     date_from: Optional[datetime] = Query(None, description="Start timestamp filter (ISO 8601)"),
@@ -72,6 +74,7 @@ def export_audit_events_csv(
     "",
     response_model=AuditListResponse,
     summary="Query and filter append-only audit trail",
+    dependencies=[Depends(require_permission("audit.read"))],
 )
 def list_audit_events(
     date_from: Optional[datetime] = Query(None, description="Start timestamp filter (ISO 8601)"),
@@ -115,6 +118,7 @@ def list_audit_events(
     "/{audit_event_id}",
     response_model=AuditEventDetailResponse,
     summary="Get audit event detailed snapshot",
+    dependencies=[Depends(require_permission("audit.read"))],
 )
 def get_audit_event(
     audit_event_id: uuid.UUID,

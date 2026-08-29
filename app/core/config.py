@@ -18,6 +18,17 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:5173"]
 
+    # Session & Cookie Security (F008)
+    SESSION_COOKIE_NAME: str = "logistics_session"
+    SESSION_COOKIE_SECURE: bool = False
+    SESSION_COOKIE_SAMESITE: str = "lax"
+    SESSION_ABSOLUTE_TTL_MINUTES: int = 480
+    SESSION_IDLE_TIMEOUT_MINUTES: int = 30
+
+    # CSRF & Bootstrap Secrets (Backend only, never in Git/Frontend)
+    CSRF_SIGNING_SECRET: str = "dev-csrf-secret-key-32-chars-minimum-entropy!!"
+    DEMO_USER_PASSWORD: str = "DemoLogistics2026!Secure"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -59,6 +70,15 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
+
+    def enforce_production_security(self) -> None:
+        """Enforces critical security policies in production environments."""
+        if self.is_production:
+            if not self.SESSION_COOKIE_SECURE:
+                raise RuntimeError(
+                    "PRODUCTION_SECURE_COOKIE_ENFORCED_VIOLATION: "
+                    "SESSION_COOKIE_SECURE must be True in production."
+                )
 
     def sanitized_database_url(self) -> str:
         """Returns a sanitized representation of the database URL hiding credentials."""

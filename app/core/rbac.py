@@ -38,3 +38,31 @@ class AuthorizationContext:
                 code="PERMISSION_DENIED",
                 details={"required_permission": permission_code},
             )
+
+
+@dataclass
+class AuthenticatedPrincipal:
+    """Real authenticated principal binding identity, roles, and effective permissions."""
+
+    user_id: uuid.UUID
+    organization_id: uuid.UUID
+    session_id: uuid.UUID
+    email: str
+    display_name: str
+    role_ids: List[uuid.UUID] = field(default_factory=list)
+    role_codes: List[str] = field(default_factory=list)
+    permissions: Set[str] = field(default_factory=set)
+    is_active: bool = True
+
+    def has_permission(self, permission_code: str) -> bool:
+        if not self.is_active or not permission_code:
+            return False
+        return permission_code.strip().lower() in {p.lower() for p in self.permissions}
+
+    def require_permission(self, permission_code: str) -> None:
+        if not self.has_permission(permission_code):
+            raise ForbiddenError(
+                message=f"Acceso denegado: falta el permiso requerido '{permission_code}'.",
+                code="PERMISSION_DENIED",
+                details={"required_permission": permission_code},
+            )
