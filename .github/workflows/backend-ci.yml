@@ -65,4 +65,5 @@ jobs:
           APP_DEBUG: "true"
           DATABASE_URL: "postgresql+psycopg://postgres:postgrespassword@localhost:5432/postgres"
           BACKEND_CORS_ORIGINS: "http://localhost:5173"
+          CSRF_SIGNING_SECRET: "ci-test-csrf-secret-key-32-chars-long-min"
         run: pytest -v
