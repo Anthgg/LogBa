@@ -12,6 +12,12 @@ WORKDIR /app
 # Install system dependencies if required for cryptography/pg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libpango-1.0-0 \
+    libharfbuzz0b \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    fonts-dejavu-core \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies

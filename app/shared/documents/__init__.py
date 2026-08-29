@@ -1,1 +1,1 @@
-
+"""Document rendering infrastructure."""

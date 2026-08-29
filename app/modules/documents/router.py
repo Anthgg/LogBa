@@ -2,6 +2,8 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.rbac import AuthenticatedPrincipal
@@ -44,6 +46,19 @@ from app.modules.documents.series_schemas import (
 from app.modules.documents.series_service import DocumentSeriesService
 from app.modules.documents.service import DocumentCatalogService
 from app.shared.audit.contracts import AuditContext
+from app.shared.documents.schemas.context import (
+    BranchHeaderContext,
+    DocumentHeaderContext,
+    DocumentMetadataContext,
+    DocumentRenderContext,
+    DocumentTableContext,
+    OrganizationHeaderContext,
+    TableColumnContext,
+    VisualSignatureContext,
+)
+from app.shared.documents.schemas.manifest import TemplateManifest
+from app.shared.documents.service import DocumentRenderingService
+from app.shared.documents.templates.registry import TemplateRegistry
 
 router = APIRouter()
 
@@ -647,4 +662,223 @@ def download_reservation_booklet(
         content=csv_content,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ============================================================================
+# F014: DOCUMENT TEMPLATES & RENDERING ENGINE ENDPOINTS
+# ============================================================================
+
+
+@router.get(
+    "/document-renderer/templates",
+    response_model=List[TemplateManifest],
+    summary="List registered document templates and manifests",
+    dependencies=[Depends(require_permission("document_templates.read"))],
+)
+def list_document_templates(
+    family: Optional[str] = Query(None, description="Filter by template family"),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> List[TemplateManifest]:
+    """Retrieves all registered template manifests."""
+    return TemplateRegistry.list_templates(family=family)
+
+
+@router.get(
+    "/document-renderer/templates/{template_key}",
+    response_model=TemplateManifest,
+    summary="Get document template manifest by key",
+    dependencies=[Depends(require_permission("document_templates.read"))],
+)
+def get_document_template(
+    template_key: str,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> TemplateManifest:
+    """Retrieves specific template manifest."""
+    return TemplateRegistry.get_manifest(template_key)
+
+
+class RenderPreviewRequest(BaseModel):
+    template_key: Optional[str] = Field(
+        None, description="Target template key (defaults to base_document_v1)"
+    )
+    format: str = Field(default="pdf", description="Output format: pdf or html")
+    context: DocumentRenderContext
+
+
+@router.post(
+    "/document-renderer/preview",
+    summary="Generate on-demand document preview (PDF or HTML) from canonical render context",
+    dependencies=[Depends(require_permission("document_templates.preview"))],
+)
+def render_document_preview(
+    payload: RenderPreviewRequest,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+):
+    """Executes backend rendering pipeline and returns compiled PDF or HTML preview."""
+    service = DocumentRenderingService()
+    pdf_bytes, html_content, snapshot_hash, pdf_hash = service.process_and_render(
+        context=payload.context,
+        template_key=payload.template_key,
+    )
+
+    headers = {
+        "X-Snapshot-Hash": snapshot_hash,
+        "X-Pdf-Hash": pdf_hash,
+        "X-Renderer-Name": "WeasyPrint",
+        "X-Renderer-Version": "69.0",
+    }
+
+    if payload.format.lower() == "html":
+        return HTMLResponse(content=html_content, headers=headers)
+
+    filename = f"{payload.context.document.display_code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            **headers,
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )
+
+
+@router.post(
+    "/document-renderer/sample",
+    summary="Generate canonical sample document for visual verification",
+    dependencies=[Depends(require_permission("document_templates.preview"))],
+)
+def render_sample_document(
+    format: str = Query("pdf", description="Output format: pdf or html"),
+    rows_count: int = Query(10, ge=1, le=100, description="Number of table rows in sample"),
+    status_code: str = Query("DRAFT", description="Document status: DRAFT, APPROVED, ISSUED, VOID"),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    db: Session = Depends(get_db),
+):
+    """Builds a realistic synthetic sample document context and renders it."""
+    # Find branch/org info
+    branch_name = "Sede Principal Lima"
+    branch_code = "LIM"
+    org_name = "Organización Logística Integral"
+    tax_id = "20100012345"
+
+    if principal.organization_id:
+        from app.modules.organization.models import Branch, Organization
+
+        org = db.query(Organization).filter(Organization.id == principal.organization_id).first()
+        if org:
+            org_name = org.name
+        branch = (
+            db.query(Branch).filter(Branch.organization_id == principal.organization_id).first()
+        )
+        if branch:
+            branch_name = branch.name
+            branch_code = branch.code
+
+    # Build sample rows
+    rows = []
+    for i in range(1, rows_count + 1):
+        rows.append(
+            {
+                "item_no": str(i),
+                "sku": f"MAT-GRE-{i:04d}",
+                "description": (
+                    f"Greda refractaria formulada estándar grado {i} para hornos industriales"
+                ),
+                "unit": "KG",
+                "quantity": f"{i * 25.50:.2f}",
+                "unit_price": f"S/ {14.20 + i:.2f}",
+                "total": f"S/ {(i * 25.50) * (14.20 + i):.2f}",
+            }
+        )
+
+    ctx = DocumentRenderContext(
+        organization=OrganizationHeaderContext(
+            name=org_name,
+            code="ORG-01",
+            tax_id=tax_id,
+        ),
+        branch=BranchHeaderContext(
+            name=branch_name,
+            code=branch_code,
+            address="Av. Industrial 456, Parque Logístico, Lima, Perú",
+        ),
+        document=DocumentHeaderContext(
+            type_code="PO",
+            type_name="Orden de Compra / Requisición Logística",
+            display_code=f"PO-{branch_code}-2026-000001",
+            status=status_code.upper(),
+            version_number=1,
+            emission_date="2026-08-29",
+        ),
+        metadata=DocumentMetadataContext(
+            generated_by=principal.email,
+            template_key="base_document_v1",
+            template_version="1.0.0",
+        ),
+        summary_fields=[
+            {"label": "Proveedor", "value": "Insumos Minerales del Perú S.A.C."},
+            {"label": "Condición de Pago", "value": "Crédito 30 días"},
+            {"label": "Moneda", "value": "Soles (PEN)"},
+            {"label": "Prioridad", "value": "Alta / Producción Inmediata"},
+        ],
+        tables=[
+            DocumentTableContext(
+                title="Detalle de Ítems e Insumos Solicitados",
+                columns=[
+                    TableColumnContext(key="item_no", label="Item", align="center", width="5%"),
+                    TableColumnContext(key="sku", label="Código SKU", align="center", width="15%"),
+                    TableColumnContext(
+                        key="description",
+                        label="Descripción del Material",
+                        align="left",
+                        width="40%",
+                    ),
+                    TableColumnContext(key="unit", label="U.M.", align="center", width="8%"),
+                    TableColumnContext(
+                        key="quantity", label="Cantidad", align="right", width="10%"
+                    ),
+                    TableColumnContext(
+                        key="unit_price", label="P. Unit.", align="right", width="10%"
+                    ),
+                    TableColumnContext(key="total", label="Total", align="right", width="12%"),
+                ],
+                rows=rows,
+            )
+        ],
+        notes=(
+            "Documento de prueba sintético generado por el motor central de renderizado F014. "
+            "Incluye validación completa de caracteres Unicode (ñ, á, é, í, ó, ú, S/), "
+            "saltos de página y verificación criptográfica QR."
+        ),
+        visual_signature=VisualSignatureContext(
+            signer_name=principal.display_name or principal.email,
+            signer_role="Responsable de Compras & Logística",
+            signed_at="2026-08-29 13:00:00 UTC",
+        ),
+    )
+
+    service = DocumentRenderingService()
+    pdf_bytes, html_content, snapshot_hash, pdf_hash = service.process_and_render(
+        context=ctx,
+        template_key="base_document_v1",
+    )
+
+    headers = {
+        "X-Snapshot-Hash": snapshot_hash,
+        "X-Pdf-Hash": pdf_hash,
+        "X-Renderer-Name": "WeasyPrint",
+        "X-Renderer-Version": "69.0",
+    }
+
+    if format.lower() == "html":
+        return HTMLResponse(content=html_content, headers=headers)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            **headers,
+            "Content-Disposition": f'inline; filename="{ctx.document.display_code}.pdf"',
+        },
     )

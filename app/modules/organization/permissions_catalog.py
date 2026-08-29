@@ -597,6 +597,27 @@ CANONICAL_PERMISSIONS_CATALOG: List[Dict[str, str | None]] = [
         "risk_level": "LOW",
         "future_phase_owner": None,
     },
+    # 23. Document Template Engine & Rendering (F014)
+    {
+        "code": "document_templates.read",
+        "name": "Consultar Plantillas Documentales",
+        "description": "Ver catálogo de plantillas registradas, manifiestos y familias",
+        "category": "DOCUMENTS",
+        "resource": "document_templates",
+        "action": "read",
+        "risk_level": "LOW",
+        "future_phase_owner": None,
+    },
+    {
+        "code": "document_templates.preview",
+        "name": "Vista Previa de Renderizado",
+        "description": "Generar vistas previas de renderizado HTML y PDF con snapshot técnico y QR",
+        "category": "DOCUMENTS",
+        "resource": "document_templates",
+        "action": "preview",
+        "risk_level": "LOW",
+        "future_phase_owner": None,
+    },
     {
         "code": "documents.emit",
         "name": "Emitir Documentos",
@@ -723,6 +744,8 @@ CANONICAL_ROLE_BASELINES: Dict[str, List[str]] = {
         "document_series.read",
         "document_series.reserve",
         "document_series.download",
+        "document_templates.read",
+        "document_templates.preview",
     ],
     "INVENTORY": [
         "organization.read",
@@ -782,6 +805,8 @@ CANONICAL_ROLE_BASELINES: Dict[str, List[str]] = {
         "audit.export",
         "document_series.read",
         "document_series.download",
+        "document_templates.read",
+        "document_templates.preview",
     ],
     "MANAGEMENT": [
         "organization.read",
@@ -829,6 +854,8 @@ CANONICAL_ROLE_BASELINES: Dict[str, List[str]] = {
         "document_series.reserve",
         "document_series.void",
         "document_series.download",
+        "document_templates.read",
+        "document_templates.preview",
     ],
 }
 
@@ -1176,5 +1203,29 @@ ENDPOINT_PERMISSION_MATRIX = [
         "method": "GET",
         "permission": "document_series.download",
         "phase": "F013",
+    },
+    {
+        "endpoint": "/api/logistics/document-renderer/templates",
+        "method": "GET",
+        "permission": "document_templates.read",
+        "phase": "F014",
+    },
+    {
+        "endpoint": "/api/logistics/document-renderer/templates/{template_key}",
+        "method": "GET",
+        "permission": "document_templates.read",
+        "phase": "F014",
+    },
+    {
+        "endpoint": "/api/logistics/document-renderer/preview",
+        "method": "POST",
+        "permission": "document_templates.preview",
+        "phase": "F014",
+    },
+    {
+        "endpoint": "/api/logistics/document-renderer/sample",
+        "method": "POST",
+        "permission": "document_templates.preview",
+        "phase": "F014",
     },
 ]
