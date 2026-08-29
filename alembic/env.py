@@ -1,8 +1,12 @@
 import logging
 from logging.config import fileConfig
 
+import app.modules.auth.models  # noqa: F401
+import app.modules.documents.models  # noqa: F401
+
 # Import all models to ensure metadata is fully populated
 import app.modules.organization.models  # noqa: F401
+import app.shared.audit.models  # noqa: F401
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base

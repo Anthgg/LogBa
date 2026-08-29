@@ -359,6 +359,12 @@ def run_seed() -> None:
             db.query(StepUpChallenge).filter(StepUpChallenge.user_id == u.id).delete()
             db.query(UserMfaFactor).filter(UserMfaFactor.user_id == u.id).delete()
 
+        # --- 5. Canonical Document Catalog ---
+        from app.modules.documents.service import DocumentCatalogService
+
+        doc_stats = DocumentCatalogService.load_canonical_catalog(db)
+        print(f"Canonical Document Catalog synchronized: {doc_stats}")
+
         db.commit()
         print("Demo seed completed successfully!")
 

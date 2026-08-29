@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.modules.auth.router import users_router
+from app.modules.documents.router import router as documents_router
 from app.modules.organization.router import router as organization_router
 from app.shared.audit.router import router as audit_router
 
@@ -28,3 +29,4 @@ def get_logistics_status():
 router.include_router(organization_router)
 router.include_router(audit_router)
 router.include_router(users_router)
+router.include_router(documents_router)
