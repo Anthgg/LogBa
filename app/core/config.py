@@ -16,12 +16,16 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: Optional[str] = None
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
 
-    BACKEND_CORS_ORIGINS: Union[List[str], str] = ["http://localhost:5173"]
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://fronlog-web-303244958634.southamerica-west1.run.app",
+    ]
 
     # Session & Cookie Security (F008)
     SESSION_COOKIE_NAME: str = "logistics_session"
-    SESSION_COOKIE_SECURE: bool = False
-    SESSION_COOKIE_SAMESITE: str = "lax"
+    SESSION_COOKIE_SECURE: bool = True
+    SESSION_COOKIE_SAMESITE: str = "none"
     SESSION_ABSOLUTE_TTL_MINUTES: int = 480
     SESSION_IDLE_TIMEOUT_MINUTES: int = 30
 

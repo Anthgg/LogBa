@@ -32,15 +32,31 @@ cors_origins: List[str] = (
     if isinstance(settings.BACKEND_CORS_ORIGINS, list)
     else [str(settings.BACKEND_CORS_ORIGINS)]
 )
+for prod_origin in [
+    "https://fronlog-web-303244958634.southamerica-west1.run.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]:
+    if prod_origin not in cors_origins:
+        cors_origins.append(prod_origin)
 
-if cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.run\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=[
+        "X-Snapshot-Hash",
+        "X-Pdf-Hash",
+        "X-Template-Key",
+        "X-Document-Type",
+        "X-Renderer-Name",
+        "X-Correlation-ID",
+        "Content-Disposition",
+    ],
+)
 
 
 # Correlation ID & Request Logging Middleware
