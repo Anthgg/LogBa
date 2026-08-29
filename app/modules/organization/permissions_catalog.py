@@ -1228,4 +1228,10 @@ ENDPOINT_PERMISSION_MATRIX = [
         "permission": "document_templates.preview",
         "phase": "F014",
     },
+    {
+        "endpoint": "/api/logistics/document-renderer/purchasing/{doc_code}/sample",
+        "method": "POST",
+        "permission": "document_templates.preview",
+        "phase": "F015",
+    },
 ]
