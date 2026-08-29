@@ -88,3 +88,15 @@ class ForbiddenError(DomainError):
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(message=message, code=code, details=details, status_code=403)
+
+
+class PreconditionRequiredError(DomainError):
+    """Raised when an operation requires step-up authentication or MFA enrollment (HTTP 428)."""
+
+    def __init__(
+        self,
+        message: str = "Precondition required for sensitive operation",
+        code: str = "STEP_UP_REQUIRED",
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(message=message, code=code, details=details, status_code=428)

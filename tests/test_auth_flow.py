@@ -1,5 +1,7 @@
+import time
 import uuid
 
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,8 +17,32 @@ from app.modules.auth.password import (
     verify_password,
 )
 from app.scripts import seed_demo
+from tests.conftest import enable_step_up_for_client
 
 settings = get_settings()
+
+
+def csrf_headers():
+    return {"X-CSRF-Token": generate_csrf_token()}
+
+
+def enroll_mfa_and_grant_step_up_auth(client: TestClient):
+    enroll_res = client.post(
+        "/api/auth/mfa/totp/enroll",
+        json={"current_password": settings.DEMO_USER_PASSWORD},
+        headers=csrf_headers(),
+    )
+    if enroll_res.status_code == 200:
+        data = enroll_res.json()
+        manual_key = data["manual_key"]
+        totp = pyotp.TOTP(manual_key)
+        client.post(
+            "/api/auth/mfa/totp/confirm",
+            json={"enrollment_id": data["enrollment_id"], "code": totp.at(int(time.time()) - 30)},
+            headers=csrf_headers(),
+        )
+        return manual_key
+    return None
 
 
 @pytest.fixture
@@ -60,7 +86,7 @@ def test_login_flow_and_session_cookie(client: TestClient):
         "/api/auth/login",
         json={
             "email": "gerencia.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
@@ -115,7 +141,7 @@ def test_login_invalid_credentials_and_audit(client: TestClient):
         "/api/auth/login",
         json={
             "email": "nonexistent@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
@@ -136,7 +162,7 @@ def test_auth_me_endpoint_and_lifecycle(client: TestClient):
         "/api/auth/login",
         json={
             "email": "almacen.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
@@ -172,7 +198,7 @@ def test_rbac_http_enforcement_and_permission_denial(client: TestClient):
         "/api/auth/login",
         json={
             "email": "almacen.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
@@ -206,7 +232,7 @@ def test_auditor_access_and_read_only_policy(client: TestClient):
         "/api/auth/login",
         json={
             "email": "auditor.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
@@ -240,10 +266,11 @@ def test_user_administration_lifecycle(client: TestClient):
         "/api/auth/login",
         json={
             "email": "gerencia.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
+    enable_step_up_for_client(client)
 
     # 1. Get organization ID
     struct_res = client.get("/api/logistics/structure")

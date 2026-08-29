@@ -118,7 +118,18 @@ def logout(
 )
 def get_me(
     principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    db: Session = Depends(get_db),
 ) -> AuthMeResponse:
+    from sqlalchemy import select
+
+    from app.modules.auth.models import UserMfaFactor
+
+    factor_stmt = select(UserMfaFactor).where(
+        UserMfaFactor.user_id == principal.user_id,
+        UserMfaFactor.status == "ACTIVE",
+    )
+    has_mfa = db.execute(factor_stmt).scalars().first() is not None
+
     user_res = UserResponse(
         id=principal.user_id,
         organization_id=principal.organization_id,
@@ -135,6 +146,7 @@ def get_me(
         organization_id=principal.organization_id,
         roles=principal.role_codes,
         permissions=sorted(list(principal.permissions)),
+        mfa_enabled=has_mfa,
     )
 
 

@@ -3,9 +3,13 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import app
 from app.modules.auth.csrf import generate_csrf_token
 from app.scripts import seed_demo
+from tests.conftest import enable_step_up_for_client
+
+settings = get_settings()
 
 
 @pytest.fixture
@@ -17,11 +21,12 @@ def client():
         "/api/auth/login",
         json={
             "email": "gerencia.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
     assert login_res.status_code == 200
+    enable_step_up_for_client(c)
     return c
 
 

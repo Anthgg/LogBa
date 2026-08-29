@@ -27,7 +27,15 @@ class Settings(BaseSettings):
 
     # CSRF & Bootstrap Secrets (Backend only, never in Git/Frontend)
     CSRF_SIGNING_SECRET: str = "dev-csrf-secret-key-32-chars-minimum-entropy!!"
-    DEMO_USER_PASSWORD: str = "DemoLogistics2026!Secure"
+    DEMO_USER_PASSWORD: str = "DevDemoRotatingSecret2026#Valid"
+
+    # MFA & Step-Up Security (F009)
+    MFA_ENCRYPTION_KEY: str = "K7gNU3sdo+OL0w1g5xV7l4k9a2j5h6P8Q1w2e3r4t5Y="
+    MFA_TOTP_ISSUER: str = "Sistema Logistico Integral"
+    STEP_UP_CHALLENGE_TTL_SECONDS: int = 300
+    STEP_UP_HIGH_GRANT_TTL_SECONDS: int = 300
+    STEP_UP_CRITICAL_GRANT_TTL_SECONDS: int = 120
+    STEP_UP_MAX_ATTEMPTS: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

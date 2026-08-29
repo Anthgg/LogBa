@@ -1,8 +1,11 @@
+import time
 import uuid
 
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.core.rbac import AuthorizationContext
 from app.main import app
 from app.modules.auth.csrf import generate_csrf_token
@@ -12,6 +15,28 @@ from app.modules.organization.permissions_catalog import (
     ENDPOINT_PERMISSION_MATRIX,
 )
 from app.scripts import seed_demo
+from tests.conftest import enable_step_up_for_client
+
+settings = get_settings()
+
+
+def enroll_mfa_and_grant_step_up_perm(client: TestClient):
+    enroll_res = client.post(
+        "/api/auth/mfa/totp/enroll",
+        json={"current_password": settings.DEMO_USER_PASSWORD},
+        headers=csrf_headers(),
+    )
+    if enroll_res.status_code == 200:
+        data = enroll_res.json()
+        manual_key = data["manual_key"]
+        totp = pyotp.TOTP(manual_key)
+        client.post(
+            "/api/auth/mfa/totp/confirm",
+            json={"enrollment_id": data["enrollment_id"], "code": totp.at(int(time.time()) - 30)},
+            headers=csrf_headers(),
+        )
+        return manual_key
+    return None
 
 
 @pytest.fixture
@@ -23,11 +48,12 @@ def client():
         "/api/auth/login",
         json={
             "email": "gerencia.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
     assert login_res.status_code == 200
+    enable_step_up_for_client(c)
     return c
 
 
@@ -92,11 +118,25 @@ def test_auditor_profile_least_privilege_and_no_mutations(client: TestClient):
     for p in auditor_perms:
         assert p["action"] not in dangerous_actions, f"Auditor has dangerous mutation: {p['code']}"
 
+    m_key = enroll_mfa_and_grant_step_up_perm(client)
     assign_res = client.put(
         f"/api/logistics/roles/{auditor_role['id']}/permissions",
         json={"permission_codes": ["inventory.adjust", "audit.read"]},
         headers=csrf_headers(),
     )
+    if assign_res.status_code == 428 and m_key:
+        ch_id = assign_res.json()["details"]["challenge_id"]
+        totp = pyotp.TOTP(m_key)
+        client.post(
+            "/api/auth/step-up/verify",
+            json={"challenge_id": ch_id, "method": "TOTP", "code": totp.now()},
+            headers=csrf_headers(),
+        )
+        assign_res = client.put(
+            f"/api/logistics/roles/{auditor_role['id']}/permissions",
+            json={"permission_codes": ["inventory.adjust", "audit.read"]},
+            headers=csrf_headers(),
+        )
     assert assign_res.status_code == 409
     assert assign_res.json()["code"] == "AUDITOR_MUTATION_FORBIDDEN"
 
@@ -118,11 +158,25 @@ def test_custom_role_permission_assignment_and_replacement(client: TestClient):
     custom_role_id = create_res.json()["id"]
 
     initial_perms = ["organization.read", "warehouse.read", "warehouse.update"]
+    m_key = enroll_mfa_and_grant_step_up_perm(client)
     assign_res = client.put(
         f"/api/logistics/roles/{custom_role_id}/permissions",
         json={"permission_codes": initial_perms},
         headers=csrf_headers(),
     )
+    if assign_res.status_code == 428 and m_key:
+        ch_id = assign_res.json()["details"]["challenge_id"]
+        totp = pyotp.TOTP(m_key)
+        client.post(
+            "/api/auth/step-up/verify",
+            json={"challenge_id": ch_id, "method": "TOTP", "code": totp.now()},
+            headers=csrf_headers(),
+        )
+        assign_res = client.put(
+            f"/api/logistics/roles/{custom_role_id}/permissions",
+            json={"permission_codes": initial_perms},
+            headers=csrf_headers(),
+        )
     assert assign_res.status_code == 200
     res_data = assign_res.json()
     assert set(res_data["effective_codes"]) == set(initial_perms)

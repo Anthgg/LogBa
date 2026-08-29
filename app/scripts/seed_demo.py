@@ -322,7 +322,7 @@ def run_seed() -> None:
             ),
         ]
 
-        demo_password = settings.DEMO_USER_PASSWORD or "DemoLogistics2026!Secure"
+        demo_password = settings.DEMO_USER_PASSWORD
         demo_password_hash = hash_password(demo_password)
 
         for email, display_name, role_code in demo_users_spec:
@@ -341,12 +341,23 @@ def run_seed() -> None:
                 user_repo.create(db, u)
                 db.flush()
                 print(f"Demo User created: {email}")
+            else:
+                # Rotate password to current settings.DEMO_USER_PASSWORD
+                u.password_hash = demo_password_hash
+                db.flush()
 
             # Assign Role
             role = role_repo.get_by_code(db, role_code, organization_id=None)
             if role:
                 user_role_repo.set_user_roles(db, u.id, [role.id])
                 print(f"Assigned role {role_code} to {email}")
+
+            # Reset MFA and Step-Up state for clean test baseline
+            from app.modules.auth.models import StepUpChallenge, StepUpGrant, UserMfaFactor
+
+            db.query(StepUpGrant).filter(StepUpGrant.user_id == u.id).delete()
+            db.query(StepUpChallenge).filter(StepUpChallenge.user_id == u.id).delete()
+            db.query(UserMfaFactor).filter(UserMfaFactor.user_id == u.id).delete()
 
         db.commit()
         print("Demo seed completed successfully!")

@@ -1,11 +1,37 @@
+import time
 import uuid
 
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
 from app.main import app
 from app.modules.auth.csrf import generate_csrf_token
 from app.scripts import seed_demo
+from tests.conftest import enable_step_up_for_client
+
+
+def enroll_mfa_if_needed(client: TestClient):
+    enroll_res = client.post(
+        "/api/auth/mfa/totp/enroll",
+        json={"current_password": settings.DEMO_USER_PASSWORD},
+        headers=csrf_headers(),
+    )
+    if enroll_res.status_code == 200:
+        data = enroll_res.json()
+        manual_key = data["manual_key"]
+        totp = pyotp.TOTP(manual_key)
+        client.post(
+            "/api/auth/mfa/totp/confirm",
+            json={"enrollment_id": data["enrollment_id"], "code": totp.at(int(time.time()) - 30)},
+            headers=csrf_headers(),
+        )
+        return manual_key
+    return None
+
+
+settings = get_settings()
 
 
 @pytest.fixture
@@ -17,11 +43,12 @@ def client():
         "/api/auth/login",
         json={
             "email": "gerencia.demo@logistica.local",
-            "password": "DemoLogistics2026!Secure",
+            "password": settings.DEMO_USER_PASSWORD,
         },
         headers={"X-CSRF-Token": csrf},
     )
     assert login_res.status_code == 200
+    enable_step_up_for_client(c)
     return c
 
 

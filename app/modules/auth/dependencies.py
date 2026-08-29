@@ -10,12 +10,14 @@ from app.core.rbac import AuthenticatedPrincipal
 from app.db.connection import get_db
 from app.modules.auth.csrf import require_csrf
 from app.modules.auth.service import AuthService
+from app.modules.auth.step_up import StepUpPolicyEngine
 from app.shared.audit.contracts import AuditContext
 from app.shared.audit.service import AuditService
 
 settings = get_settings()
 auth_service = AuthService()
 audit_service = AuditService()
+step_up_engine = StepUpPolicyEngine()
 
 
 def validate_csrf(request: Request) -> None:
@@ -73,16 +75,19 @@ def get_audit_context(
 
 
 def require_permission(permission_code: str) -> Callable:
-    """Factory creating an endpoint dependency that enforces action-based RBAC permission."""
+    """Factory creating an endpoint dependency that enforces action-based RBAC
+    permissions and Step-Up policies.
+    """
 
     def _permission_dependency(
         request: Request,
         principal: AuthenticatedPrincipal = Depends(get_current_principal),
         db: Session = Depends(get_db),
     ) -> AuthenticatedPrincipal:
+        correlation_id = getattr(request.state, "correlation_id", None) or uuid.uuid4()
+
+        # 1. RBAC Authorization check (Must fail first with 403 if unauthorized)
         if not principal.has_permission(permission_code):
-            # Record Audit Denial Event
-            correlation_id = getattr(request.state, "correlation_id", None) or uuid.uuid4()
             ip_address = request.client.host if request.client else None
             user_agent = request.headers.get("user-agent")
 
@@ -110,6 +115,15 @@ def require_permission(permission_code: str) -> Callable:
                 code="PERMISSION_DENIED",
                 details={"required_permission": permission_code},
             )
+
+        # 2. Step-Up Policy Engine check (Evaluated only after RBAC permission is granted)
+        step_up_engine.evaluate_step_up(
+            db=db,
+            principal=principal,
+            permission_code=permission_code,
+            correlation_id=correlation_id,
+        )
+
         return principal
 
     return _permission_dependency
