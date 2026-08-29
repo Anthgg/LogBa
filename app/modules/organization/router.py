@@ -33,6 +33,8 @@ from app.modules.organization.service import (
     StructureService,
     WarehouseService,
 )
+from app.shared.audit.context import get_audit_context
+from app.shared.audit.contracts import AuditContext
 
 router = APIRouter()
 org_service = OrganizationService()
@@ -61,9 +63,11 @@ def get_structure(db: Session = Depends(get_db)) -> StructureResponse:
     summary="Create organization",
 )
 def create_organization(
-    data: OrganizationCreate, db: Session = Depends(get_db)
+    data: OrganizationCreate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> OrganizationResponse:
-    res = org_service.create_organization(db, data)
+    res = org_service.create_organization(db, data, context=context)
     return OrganizationResponse.model_validate(res)
 
 
@@ -95,9 +99,12 @@ def get_organization(org_id: uuid.UUID, db: Session = Depends(get_db)) -> Organi
     summary="Update organization",
 )
 def update_organization(
-    org_id: uuid.UUID, data: OrganizationUpdate, db: Session = Depends(get_db)
+    org_id: uuid.UUID,
+    data: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> OrganizationResponse:
-    res = org_service.update_organization(db, org_id, data)
+    res = org_service.update_organization(db, org_id, data, context=context)
     return OrganizationResponse.model_validate(res)
 
 
@@ -106,8 +113,12 @@ def update_organization(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete organization",
 )
-def delete_organization(org_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    org_service.delete_organization(db, org_id)
+def delete_organization(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
+) -> None:
+    org_service.delete_organization(db, org_id, context=context)
 
 
 # --- Branches ---
@@ -118,9 +129,12 @@ def delete_organization(org_id: uuid.UUID, db: Session = Depends(get_db)) -> Non
     summary="Create branch under organization",
 )
 def create_branch(
-    org_id: uuid.UUID, data: BranchCreate, db: Session = Depends(get_db)
+    org_id: uuid.UUID,
+    data: BranchCreate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> BranchResponse:
-    res = branch_service.create_branch(db, org_id, data)
+    res = branch_service.create_branch(db, org_id, data, context=context)
     return BranchResponse.model_validate(res)
 
 
@@ -152,9 +166,12 @@ def get_branch(branch_id: uuid.UUID, db: Session = Depends(get_db)) -> BranchRes
     summary="Update branch",
 )
 def update_branch(
-    branch_id: uuid.UUID, data: BranchUpdate, db: Session = Depends(get_db)
+    branch_id: uuid.UUID,
+    data: BranchUpdate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> BranchResponse:
-    res = branch_service.update_branch(db, branch_id, data)
+    res = branch_service.update_branch(db, branch_id, data, context=context)
     return BranchResponse.model_validate(res)
 
 
@@ -163,8 +180,12 @@ def update_branch(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete branch",
 )
-def delete_branch(branch_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    branch_service.delete_branch(db, branch_id)
+def delete_branch(
+    branch_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
+) -> None:
+    branch_service.delete_branch(db, branch_id, context=context)
 
 
 # --- Warehouses ---
@@ -175,9 +196,12 @@ def delete_branch(branch_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
     summary="Create warehouse under branch",
 )
 def create_warehouse(
-    branch_id: uuid.UUID, data: WarehouseCreate, db: Session = Depends(get_db)
+    branch_id: uuid.UUID,
+    data: WarehouseCreate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> WarehouseResponse:
-    res = wh_service.create_warehouse(db, branch_id, data)
+    res = wh_service.create_warehouse(db, branch_id, data, context=context)
     return WarehouseResponse.model_validate(res)
 
 
@@ -209,9 +233,12 @@ def get_warehouse(warehouse_id: uuid.UUID, db: Session = Depends(get_db)) -> War
     summary="Update warehouse",
 )
 def update_warehouse(
-    warehouse_id: uuid.UUID, data: WarehouseUpdate, db: Session = Depends(get_db)
+    warehouse_id: uuid.UUID,
+    data: WarehouseUpdate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> WarehouseResponse:
-    res = wh_service.update_warehouse(db, warehouse_id, data)
+    res = wh_service.update_warehouse(db, warehouse_id, data, context=context)
     return WarehouseResponse.model_validate(res)
 
 
@@ -220,8 +247,12 @@ def update_warehouse(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete warehouse",
 )
-def delete_warehouse(warehouse_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    wh_service.delete_warehouse(db, warehouse_id)
+def delete_warehouse(
+    warehouse_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
+) -> None:
+    wh_service.delete_warehouse(db, warehouse_id, context=context)
 
 
 # --- Permissions ---
@@ -273,8 +304,12 @@ def get_role_matrix() -> RoleMatrixResponse:
     status_code=status.HTTP_201_CREATED,
     summary="Create role",
 )
-def create_role(data: RoleCreate, db: Session = Depends(get_db)) -> RoleResponse:
-    res = role_service.create_role(db, data)
+def create_role(
+    data: RoleCreate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
+) -> RoleResponse:
+    res = role_service.create_role(db, data, context=context)
     return RoleResponse.model_validate(res)
 
 
@@ -306,9 +341,12 @@ def get_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> RoleResponse:
     summary="Update role",
 )
 def update_role(
-    role_id: uuid.UUID, data: RoleUpdate, db: Session = Depends(get_db)
+    role_id: uuid.UUID,
+    data: RoleUpdate,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> RoleResponse:
-    res = role_service.update_role(db, role_id, data)
+    res = role_service.update_role(db, role_id, data, context=context)
     return RoleResponse.model_validate(res)
 
 
@@ -317,8 +355,12 @@ def update_role(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete role",
 )
-def delete_role(role_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
-    role_service.delete_role(db, role_id)
+def delete_role(
+    role_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
+) -> None:
+    role_service.delete_role(db, role_id, context=context)
 
 
 @router.get(
@@ -341,5 +383,6 @@ def assign_role_permissions(
     role_id: uuid.UUID,
     data: RolePermissionAssignRequest,
     db: Session = Depends(get_db),
+    context: AuditContext = Depends(get_audit_context),
 ) -> RoleEffectivePermissionsResponse:
-    return perm_service.assign_role_permissions(db, role_id, data)
+    return perm_service.assign_role_permissions(db, role_id, data, context=context)

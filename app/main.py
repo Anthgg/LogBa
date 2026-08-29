@@ -1,6 +1,7 @@
-from typing import List, cast
+import uuid
+from typing import Callable, List, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.logistics.router import router as logistics_router
@@ -33,6 +34,22 @@ if cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+# Correlation ID Middleware
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next: Callable) -> Response:
+    raw_correlation = request.headers.get("X-Correlation-ID")
+    try:
+        correlation_id = uuid.UUID(raw_correlation) if raw_correlation else uuid.uuid4()
+    except (ValueError, TypeError):
+        correlation_id = uuid.uuid4()
+
+    request.state.correlation_id = correlation_id
+    response = await call_next(request)
+    response.headers["X-Correlation-ID"] = str(correlation_id)
+    return response
+
 
 # Register machine-readable global exception handlers
 register_error_handlers(app)

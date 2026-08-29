@@ -52,6 +52,8 @@ from app.modules.organization.schemas import (
     WarehouseCreate,
     WarehouseUpdate,
 )
+from app.shared.audit.contracts import AuditContext
+from app.shared.audit.service import AuditService
 
 settings = get_settings()
 
@@ -60,8 +62,15 @@ class OrganizationService:
     def __init__(self) -> None:
         self.org_repo = OrganizationRepository()
         self.branch_repo = BranchRepository()
+        self.audit_service = AuditService()
 
-    def create_organization(self, db: Session, data: OrganizationCreate) -> Organization:
+    def create_organization(
+        self,
+        db: Session,
+        data: OrganizationCreate,
+        context: Optional[AuditContext] = None,
+    ) -> Organization:
+        ctx = context or AuditContext(is_test_data=data.is_test_data)
         if data.is_test_data and settings.is_production:
             raise ForbiddenError(
                 message="Synthetic test data cannot be created in production environment.",
@@ -83,6 +92,25 @@ class OrganizationService:
             is_test_data=data.is_test_data,
         )
         self.org_repo.create(db, org)
+        db.flush()
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="organization",
+            resource_id=org.id,
+            action="organization.create",
+            result="SUCCESS",
+            after_data={
+                "id": str(org.id),
+                "code": org.code,
+                "name": org.name,
+                "is_active": org.is_active,
+                "is_test_data": org.is_test_data,
+            },
+        )
+
         db.commit()
         db.refresh(org)
         return org
@@ -101,27 +129,80 @@ class OrganizationService:
         return self.org_repo.list_all(db)
 
     def update_organization(
-        self, db: Session, org_id: uuid.UUID, data: OrganizationUpdate
+        self,
+        db: Session,
+        org_id: uuid.UUID,
+        data: OrganizationUpdate,
+        context: Optional[AuditContext] = None,
     ) -> Organization:
+        ctx = context or AuditContext()
         org = self.get_organization(db, org_id)
+        before_snapshot = {"name": org.name, "is_active": org.is_active}
+
         if data.name is not None:
             org.name = data.name
         if data.is_active is not None:
             org.is_active = data.is_active
+
+        after_snapshot = {"name": org.name, "is_active": org.is_active}
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="organization",
+            resource_id=org.id,
+            action="organization.update",
+            result="SUCCESS",
+            before_data=before_snapshot,
+            after_data=after_snapshot,
+        )
+
         db.commit()
         db.refresh(org)
         return org
 
-    def delete_organization(self, db: Session, org_id: uuid.UUID) -> None:
+    def delete_organization(
+        self,
+        db: Session,
+        org_id: uuid.UUID,
+        context: Optional[AuditContext] = None,
+    ) -> None:
+        ctx = context or AuditContext()
         org = self.get_organization(db, org_id)
         branch_count = self.branch_repo.count_by_organization(db, org_id)
         if branch_count > 0:
+            # Audit Failure
+            self.audit_service.record_event(
+                db=db,
+                context=ctx,
+                resource_type="organization",
+                resource_id=org_id,
+                action="organization.delete",
+                result="FAILURE",
+                reason="ORGANIZATION_HAS_BRANCHES",
+                metadata={"branch_count": branch_count},
+            )
+            db.commit()
             raise ConflictError(
                 message="No se puede eliminar la organización porque contiene sedes asociadas.",
                 code="ORGANIZATION_HAS_BRANCHES",
                 details={"organization_id": str(org_id), "branch_count": branch_count},
             )
+
+        before_snapshot = {"id": str(org.id), "code": org.code, "name": org.name}
         self.org_repo.delete(db, org)
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="organization",
+            resource_id=org_id,
+            action="organization.delete",
+            result="SUCCESS",
+            before_data=before_snapshot,
+        )
         db.commit()
 
 
@@ -131,8 +212,16 @@ class BranchService:
         self.branch_repo = BranchRepository()
         self.loc_repo = OperationalLocationRepository()
         self.warehouse_repo = WarehouseRepository()
+        self.audit_service = AuditService()
 
-    def create_branch(self, db: Session, org_id: uuid.UUID, data: BranchCreate) -> Branch:
+    def create_branch(
+        self,
+        db: Session,
+        org_id: uuid.UUID,
+        data: BranchCreate,
+        context: Optional[AuditContext] = None,
+    ) -> Branch:
+        ctx = context or AuditContext(organization_id=org_id, is_test_data=data.is_test_data)
         org = self.org_repo.get_by_id(db, org_id)
         if not org:
             raise NotFoundError(
@@ -167,6 +256,7 @@ class BranchService:
             longitude=data.location.longitude,
         )
         self.loc_repo.create(db, location)
+        db.flush()
 
         branch = Branch(
             organization_id=org_id,
@@ -177,6 +267,25 @@ class BranchService:
             is_test_data=data.is_test_data,
         )
         self.branch_repo.create(db, branch)
+        db.flush()
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="branch",
+            resource_id=branch.id,
+            action="branch.create",
+            result="SUCCESS",
+            after_data={
+                "id": str(branch.id),
+                "organization_id": str(org_id),
+                "code": branch.code,
+                "name": branch.name,
+                "is_active": branch.is_active,
+            },
+        )
+
         db.commit()
         db.refresh(branch)
         return branch
@@ -201,8 +310,17 @@ class BranchService:
             )
         return self.branch_repo.list_by_organization(db, org_id)
 
-    def update_branch(self, db: Session, branch_id: uuid.UUID, data: BranchUpdate) -> Branch:
+    def update_branch(
+        self,
+        db: Session,
+        branch_id: uuid.UUID,
+        data: BranchUpdate,
+        context: Optional[AuditContext] = None,
+    ) -> Branch:
+        ctx = context or AuditContext()
         branch = self.get_branch(db, branch_id)
+        before_snapshot = {"name": branch.name, "is_active": branch.is_active}
+
         if data.name is not None:
             branch.name = data.name
         if data.is_active is not None:
@@ -219,20 +337,65 @@ class BranchService:
             loc.latitude = data.location.latitude
             loc.longitude = data.location.longitude
 
+        after_snapshot = {"name": branch.name, "is_active": branch.is_active}
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="branch",
+            resource_id=branch.id,
+            action="branch.update",
+            result="SUCCESS",
+            before_data=before_snapshot,
+            after_data=after_snapshot,
+        )
+
         db.commit()
         db.refresh(branch)
         return branch
 
-    def delete_branch(self, db: Session, branch_id: uuid.UUID) -> None:
+    def delete_branch(
+        self,
+        db: Session,
+        branch_id: uuid.UUID,
+        context: Optional[AuditContext] = None,
+    ) -> None:
+        ctx = context or AuditContext()
         branch = self.get_branch(db, branch_id)
         warehouse_count = self.warehouse_repo.count_by_branch(db, branch_id)
         if warehouse_count > 0:
+            # Audit Failure
+            self.audit_service.record_event(
+                db=db,
+                context=ctx,
+                resource_type="branch",
+                resource_id=branch_id,
+                action="branch.delete",
+                result="FAILURE",
+                reason="BRANCH_HAS_WAREHOUSES",
+                metadata={"warehouse_count": warehouse_count},
+            )
+            db.commit()
             raise ConflictError(
                 message="No se puede eliminar la sede porque contiene almacenes asociados.",
                 code="BRANCH_HAS_WAREHOUSES",
                 details={"branch_id": str(branch_id), "warehouse_count": warehouse_count},
             )
+
+        before_snapshot = {"id": str(branch.id), "code": branch.code, "name": branch.name}
         self.branch_repo.delete(db, branch)
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="branch",
+            resource_id=branch_id,
+            action="branch.delete",
+            result="SUCCESS",
+            before_data=before_snapshot,
+        )
         db.commit()
 
 
@@ -241,9 +404,14 @@ class WarehouseService:
         self.branch_repo = BranchRepository()
         self.warehouse_repo = WarehouseRepository()
         self.loc_repo = OperationalLocationRepository()
+        self.audit_service = AuditService()
 
     def create_warehouse(
-        self, db: Session, branch_id: uuid.UUID, data: WarehouseCreate
+        self,
+        db: Session,
+        branch_id: uuid.UUID,
+        data: WarehouseCreate,
+        context: Optional[AuditContext] = None,
     ) -> Warehouse:
         branch = self.branch_repo.get_by_id(db, branch_id)
         if not branch:
@@ -252,6 +420,12 @@ class WarehouseService:
                 code="BRANCH_NOT_FOUND",
                 details={"branch_id": str(branch_id)},
             )
+
+        ctx = context or AuditContext(
+            organization_id=branch.organization_id,
+            branch_id=branch_id,
+            is_test_data=data.is_test_data,
+        )
 
         if data.is_test_data and settings.is_production:
             raise ForbiddenError(
@@ -287,6 +461,7 @@ class WarehouseService:
                 longitude=data.custom_location.longitude,
             )
             self.loc_repo.create(db, custom_loc)
+            db.flush()
             location_id = custom_loc.id
 
         warehouse = Warehouse(
@@ -299,6 +474,25 @@ class WarehouseService:
             is_test_data=data.is_test_data,
         )
         self.warehouse_repo.create(db, warehouse)
+        db.flush()
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="warehouse",
+            resource_id=warehouse.id,
+            action="warehouse.create",
+            result="SUCCESS",
+            after_data={
+                "id": str(warehouse.id),
+                "code": warehouse.code,
+                "name": warehouse.name,
+                "branch_id": str(branch_id),
+                "is_active": warehouse.is_active,
+            },
+        )
+
         db.commit()
         db.refresh(warehouse)
         return warehouse
@@ -324,9 +518,20 @@ class WarehouseService:
         return self.warehouse_repo.list_by_branch(db, branch_id)
 
     def update_warehouse(
-        self, db: Session, warehouse_id: uuid.UUID, data: WarehouseUpdate
+        self,
+        db: Session,
+        warehouse_id: uuid.UUID,
+        data: WarehouseUpdate,
+        context: Optional[AuditContext] = None,
     ) -> Warehouse:
         warehouse = self.get_warehouse(db, warehouse_id)
+        ctx = context or AuditContext(
+            organization_id=warehouse.organization_id,
+            branch_id=warehouse.branch_id,
+            warehouse_id=warehouse.id,
+        )
+        before_snapshot = {"name": warehouse.name, "is_active": warehouse.is_active}
+
         if data.name is not None:
             warehouse.name = data.name
         if data.is_active is not None:
@@ -361,15 +566,53 @@ class WarehouseService:
                     longitude=data.custom_location.longitude,
                 )
                 self.loc_repo.create(db, new_loc)
+                db.flush()
                 warehouse.location_id = new_loc.id
+
+        after_snapshot = {"name": warehouse.name, "is_active": warehouse.is_active}
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="warehouse",
+            resource_id=warehouse.id,
+            action="warehouse.update",
+            result="SUCCESS",
+            before_data=before_snapshot,
+            after_data=after_snapshot,
+        )
 
         db.commit()
         db.refresh(warehouse)
         return warehouse
 
-    def delete_warehouse(self, db: Session, warehouse_id: uuid.UUID) -> None:
+    def delete_warehouse(
+        self,
+        db: Session,
+        warehouse_id: uuid.UUID,
+        context: Optional[AuditContext] = None,
+    ) -> None:
         warehouse = self.get_warehouse(db, warehouse_id)
+        ctx = context or AuditContext(
+            organization_id=warehouse.organization_id,
+            branch_id=warehouse.branch_id,
+            warehouse_id=warehouse.id,
+        )
+        before_snapshot = {"id": str(warehouse.id), "code": warehouse.code, "name": warehouse.name}
         self.warehouse_repo.delete(db, warehouse)
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="warehouse",
+            resource_id=warehouse_id,
+            action="warehouse.delete",
+            result="SUCCESS",
+            before_data=before_snapshot,
+            after_data=None,
+        )
         db.commit()
 
 
@@ -377,8 +620,18 @@ class RoleService:
     def __init__(self) -> None:
         self.role_repo = RoleRepository()
         self.org_repo = OrganizationRepository()
+        self.audit_service = AuditService()
 
-    def create_role(self, db: Session, data: RoleCreate) -> Role:
+    def create_role(
+        self,
+        db: Session,
+        data: RoleCreate,
+        context: Optional[AuditContext] = None,
+    ) -> Role:
+        ctx = context or AuditContext(
+            organization_id=data.organization_id,
+            is_test_data=data.is_test_data,
+        )
         if data.organization_id is not None:
             org = self.org_repo.get_by_id(db, data.organization_id)
             if not org:
@@ -412,6 +665,24 @@ class RoleService:
             is_test_data=data.is_test_data,
         )
         self.role_repo.create(db, role)
+        db.flush()
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="role",
+            resource_id=role.id,
+            action="roles.create",
+            result="SUCCESS",
+            after_data={
+                "id": str(role.id),
+                "code": role.code,
+                "name": role.name,
+                "is_system": role.is_system,
+            },
+        )
+
         db.commit()
         db.refresh(role)
         return role
@@ -429,27 +700,89 @@ class RoleService:
     def list_roles(self, db: Session, organization_id: Optional[uuid.UUID] = None) -> List[Role]:
         return self.role_repo.list_all(db, organization_id)
 
-    def update_role(self, db: Session, role_id: uuid.UUID, data: RoleUpdate) -> Role:
+    def update_role(
+        self,
+        db: Session,
+        role_id: uuid.UUID,
+        data: RoleUpdate,
+        context: Optional[AuditContext] = None,
+    ) -> Role:
+        ctx = context or AuditContext()
         role = self.get_role(db, role_id)
+        before_snapshot = {
+            "name": role.name,
+            "description": role.description,
+            "is_active": role.is_active,
+        }
+
         if data.name is not None:
             role.name = data.name
         if data.description is not None:
             role.description = data.description
         if data.is_active is not None:
             role.is_active = data.is_active
+
+        after_snapshot = {
+            "name": role.name,
+            "description": role.description,
+            "is_active": role.is_active,
+        }
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="role",
+            resource_id=role.id,
+            action="roles.update",
+            result="SUCCESS",
+            before_data=before_snapshot,
+            after_data=after_snapshot,
+        )
+
         db.commit()
         db.refresh(role)
         return role
 
-    def delete_role(self, db: Session, role_id: uuid.UUID) -> None:
+    def delete_role(
+        self,
+        db: Session,
+        role_id: uuid.UUID,
+        context: Optional[AuditContext] = None,
+    ) -> None:
+        ctx = context or AuditContext()
         role = self.get_role(db, role_id)
         if role.is_system:
+            # Audit Failure
+            self.audit_service.record_event(
+                db=db,
+                context=ctx,
+                resource_type="role",
+                resource_id=role_id,
+                action="roles.delete",
+                result="FAILURE",
+                reason="SYSTEM_ROLE_PROTECTED",
+            )
+            db.commit()
             raise ConflictError(
                 message="Los roles base del sistema están protegidos y no pueden ser eliminados.",
                 code="SYSTEM_ROLE_PROTECTED",
                 details={"role_id": str(role_id), "code": role.code},
             )
+
+        before_snapshot = {"id": str(role.id), "code": role.code, "name": role.name}
         self.role_repo.delete(db, role)
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="role",
+            resource_id=role_id,
+            action="roles.delete",
+            result="SUCCESS",
+            before_data=before_snapshot,
+        )
         db.commit()
 
     def get_matrix(self) -> RoleMatrixResponse:
@@ -461,6 +794,7 @@ class PermissionService:
         self.perm_repo = PermissionRepository()
         self.role_perm_repo = RolePermissionRepository()
         self.role_repo = RoleRepository()
+        self.audit_service = AuditService()
 
     def list_permissions(self, db: Session, category: Optional[str] = None) -> List[Permission]:
         return self.perm_repo.list_all(db, category=category, active_only=True)
@@ -495,7 +829,6 @@ class PermissionService:
         for conflict in SOD_CONFLICTS_DATA:
             role_a = conflict["role_a"]
             role_b = conflict["role_b"]
-            # Detect cross-domain permission accumulation
             has_domain_a = any(c.startswith(role_a.lower()) for c in perm_codes)
             has_domain_b = any(c.startswith(role_b.lower()) for c in perm_codes)
             if has_domain_a and has_domain_b:
@@ -520,8 +853,13 @@ class PermissionService:
         )
 
     def assign_role_permissions(
-        self, db: Session, role_id: uuid.UUID, data: RolePermissionAssignRequest
+        self,
+        db: Session,
+        role_id: uuid.UUID,
+        data: RolePermissionAssignRequest,
+        context: Optional[AuditContext] = None,
     ) -> RoleEffectivePermissionsResponse:
+        ctx = context or AuditContext()
         role = self.role_repo.get_by_id(db, role_id)
         if not role:
             raise NotFoundError(
@@ -529,6 +867,10 @@ class PermissionService:
                 code="ROLE_NOT_FOUND",
                 details={"role_id": str(role_id)},
             )
+
+        # Existing permissions for before snapshot
+        old_perms = self.role_perm_repo.list_permissions_by_role(db, role_id)
+        old_codes = [p.code for p in old_perms]
 
         # Resolve target permission IDs
         target_perm_ids: List[uuid.UUID] = []
@@ -569,21 +911,49 @@ class PermissionService:
             }
             violations = [p.code for p in assigned_perms if p.action in dangerous_actions]
             if violations:
+                # Audit Denied
+                self.audit_service.record_event(
+                    db=db,
+                    context=ctx,
+                    resource_type="role_permission",
+                    resource_id=role_id,
+                    action="permissions.assign",
+                    result="DENIED",
+                    reason="AUDITOR_MUTATION_FORBIDDEN",
+                    metadata={"violating_permissions": violations},
+                )
+                db.commit()
                 raise ConflictError(
                     message="Auditor profile is read-only and cannot have operational mutations.",
                     code="AUDITOR_MUTATION_FORBIDDEN",
                     details={"violating_permissions": violations},
                 )
 
-        self.role_perm_repo.set_role_permissions(db, role_id, target_perm_ids)
-        db.commit()
+        new_perms = self.role_perm_repo.set_role_permissions(db, role_id, target_perm_ids)
+        new_codes = [p.code for p in new_perms]
 
+        added = [c for c in new_codes if c not in old_codes]
+        removed = [c for c in old_codes if c not in new_codes]
+
+        # Audit Event
+        self.audit_service.record_event(
+            db=db,
+            context=ctx,
+            resource_type="role_permission",
+            resource_id=role_id,
+            action="permissions.assign",
+            result="SUCCESS",
+            before_data={"permission_codes": old_codes},
+            after_data={"permission_codes": new_codes},
+            metadata={"added_permissions": added, "removed_permissions": removed},
+        )
+
+        db.commit()
         return self.get_role_effective_permissions(db, role_id)
 
     def create_authorization_context(
         self, db: Session, role_ids: List[uuid.UUID], org_id: Optional[uuid.UUID] = None
     ) -> AuthorizationContext:
-        """Create an AuthorizationContext instance for domain evaluation."""
         if not role_ids:
             return AuthorizationContext(is_active=False)
 

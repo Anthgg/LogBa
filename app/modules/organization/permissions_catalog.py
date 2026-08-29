@@ -846,4 +846,22 @@ ENDPOINT_PERMISSION_MATRIX = [
         "permission": "permissions.assign",
         "phase": "F006",
     },
+    {
+        "endpoint": "/api/logistics/audit-events",
+        "method": "GET",
+        "permission": "audit.read",
+        "phase": "F007",
+    },
+    {
+        "endpoint": "/api/logistics/audit-events/export",
+        "method": "GET",
+        "permission": "audit.export",
+        "phase": "F007",
+    },
+    {
+        "endpoint": "/api/logistics/audit-events/{id}",
+        "method": "GET",
+        "permission": "audit.read",
+        "phase": "F007",
+    },
 ]
