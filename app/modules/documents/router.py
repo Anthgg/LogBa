@@ -4,13 +4,21 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.rbac import AuthenticatedPrincipal
 from app.db.connection import get_db
 from app.modules.auth.dependencies import (
     get_audit_context,
+    get_current_principal,
     require_permission,
     validate_csrf,
 )
 from app.modules.documents.models import DocumentType
+from app.modules.documents.numbering_standard import (
+    DocumentNumberingPreviewRequest,
+    DocumentNumberingPreviewResponse,
+    DocumentNumberingService,
+    NumberingStandardSpecResponse,
+)
 from app.modules.documents.schemas import (
     DocumentFamilyCreate,
     DocumentFamilyResponse,
@@ -300,3 +308,32 @@ def get_document_type_version_by_number(
             detail=f"Versión {version_number} no encontrada para este tipo documental",
         )
     return DocumentTypeVersionResponse.model_validate(version)
+
+
+# --- Document Numbering Standard & Preview (F012) ---
+@router.get(
+    "/document-numbering/standard",
+    response_model=NumberingStandardSpecResponse,
+    summary="Get canonical document numbering standard specification (TIPO-SEDE-AÑO-CORRELATIVO)",
+    dependencies=[Depends(require_permission("document_catalog.read"))],
+)
+def get_document_numbering_standard() -> NumberingStandardSpecResponse:
+    return DocumentNumberingService.get_standard_spec()
+
+
+@router.post(
+    "/document-numbering/preview",
+    response_model=DocumentNumberingPreviewResponse,
+    summary="Generate non-allocating preview of canonical document code",
+    dependencies=[Depends(require_permission("document_catalog.read")), Depends(validate_csrf)],
+)
+def preview_document_numbering(
+    data: DocumentNumberingPreviewRequest,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    db: Session = Depends(get_db),
+) -> DocumentNumberingPreviewResponse:
+    return DocumentNumberingService.preview_numbering(
+        db=db,
+        principal=principal,
+        payload=data,
+    )

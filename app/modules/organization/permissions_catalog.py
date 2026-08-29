@@ -1057,4 +1057,16 @@ ENDPOINT_PERMISSION_MATRIX = [
         "permission": "document_catalog.read",
         "phase": "F011",
     },
+    {
+        "endpoint": "/api/logistics/document-numbering/standard",
+        "method": "GET",
+        "permission": "document_catalog.read",
+        "phase": "F012",
+    },
+    {
+        "endpoint": "/api/logistics/document-numbering/preview",
+        "method": "POST",
+        "permission": "document_catalog.read",
+        "phase": "F012",
+    },
 ]
