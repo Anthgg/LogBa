@@ -1,6 +1,7 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -9,6 +10,18 @@ from app.db.connection import SessionLocal
 from app.modules.auth.models import AuthSession, StepUpGrant, UserMfaFactor
 
 settings = get_settings()
+
+
+@pytest.fixture(autouse=True)
+def override_test_cookies():
+    """Ensure TestClient can receive cookies over plaintext http://testserver."""
+    original_secure = settings.SESSION_COOKIE_SECURE
+    original_samesite = settings.SESSION_COOKIE_SAMESITE
+    settings.SESSION_COOKIE_SECURE = False
+    settings.SESSION_COOKIE_SAMESITE = "lax"
+    yield
+    settings.SESSION_COOKIE_SECURE = original_secure
+    settings.SESSION_COOKIE_SAMESITE = original_samesite
 
 
 def enable_step_up_for_client(c: TestClient) -> None:

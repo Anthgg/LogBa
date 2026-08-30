@@ -24,8 +24,8 @@ class Settings(BaseSettings):
 
     # Session & Cookie Security (F008)
     SESSION_COOKIE_NAME: str = "logistics_session"
-    SESSION_COOKIE_SECURE: bool = False
-    SESSION_COOKIE_SAMESITE: str = "lax"
+    SESSION_COOKIE_SECURE: bool = True
+    SESSION_COOKIE_SAMESITE: str = "none"
     SESSION_ABSOLUTE_TTL_MINUTES: int = 480
     SESSION_IDLE_TIMEOUT_MINUTES: int = 30
 
