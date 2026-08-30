@@ -68,12 +68,13 @@ def login(
     )
 
     # Set HttpOnly session cookie
-    samesite_val = cast(Literal["lax", "strict", "none"], settings.SESSION_COOKIE_SAMESITE.lower())
+    is_secure = settings.SESSION_COOKIE_SECURE or (request.url.scheme == "https")
+    samesite_val = cast(Literal["lax", "strict", "none"], "none" if is_secure else "lax")
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=raw_token,
         httponly=True,
-        secure=settings.SESSION_COOKIE_SECURE,
+        secure=is_secure,
         samesite=samesite_val,
         path="/",
         max_age=settings.SESSION_ABSOLUTE_TTL_MINUTES * 60,
@@ -100,12 +101,13 @@ def logout(
     raw_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
     auth_service.logout(db, raw_token)
 
-    samesite_val = cast(Literal["lax", "strict", "none"], settings.SESSION_COOKIE_SAMESITE.lower())
+    is_secure = settings.SESSION_COOKIE_SECURE or (request.url.scheme == "https")
+    samesite_val = cast(Literal["lax", "strict", "none"], "none" if is_secure else "lax")
     response.delete_cookie(
         key=settings.SESSION_COOKIE_NAME,
         path="/",
         httponly=True,
-        secure=settings.SESSION_COOKIE_SECURE,
+        secure=is_secure,
         samesite=samesite_val,
     )
     return {"status": "logged_out"}

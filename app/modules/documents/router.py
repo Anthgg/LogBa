@@ -2954,3 +2954,690 @@ def render_inventory_sample_document(
             "Content-Disposition": f'inline; filename="{filename}"',
         },
     )
+
+
+def build_outbound_sample_context(
+    doc_code: str,
+    scenario: str = "basic",
+    status_code: Optional[str] = None,
+    org_name: str = "Organización Logística Integral del Perú",
+    tax_id: str = "20100012345",
+    branch_name: str = "Sede Principal Lima",
+    branch_code: str = "LIM",
+    branch_address: str = "Av. Industrial 456, Parque Logístico, Callao, Lima",
+    user_email: str = "operador.demo@logistica.local",
+) -> Tuple[DocumentRenderContext, str]:
+    """Constructs a deterministic synthetic preview context for outbound document package (F018)."""
+    code_upper = doc_code.upper().strip()
+    is_multipage = scenario == "multipage"
+    is_high_priority = scenario == "high_priority"
+    is_multi_package = scenario == "multi_package"
+    is_diff = scenario == "with_difference"
+    is_repl = scenario == "replacement"
+
+    org_ctx = OrganizationHeaderContext(
+        name=org_name,
+        tax_id=tax_id,
+    )
+    branch_ctx = BranchHeaderContext(
+        name=branch_name,
+        code=branch_code,
+        address=branch_address,
+    )
+
+    if code_upper in ("OUT_REQ", "PED", "OUTBOUND_REQUEST"):
+        template_key = "outbound_request_v1"
+        st = status_code or ("READY" if not is_high_priority else "PENDING_PICKING")
+        rows_count = 50 if is_multipage else 5
+
+        rows = [
+            {
+                "item_no": str(i),
+                "sku": f"PRD-OUT-{1000 + i}",
+                "description": (
+                    f"Material Operativo de Despacho Grado {chr(65 + (i % 26))} - Ref {i:03d}"
+                ),
+                "requested_qty": f"{(i * 15) % 150 + 10:.2f}",
+                "uom": "UN" if i % 2 == 0 else "CAJ",
+                "notes": "Prioridad alta de despacho" if is_high_priority else "Despacho estándar",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="OUT_REQ",
+                type_name="Solicitud de Salida de Almacén",
+                display_code=f"PREVIEW-PED-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Solicitante", "value": "Carlos Mendoza Paredes (Área Comercial)"},
+                {"label": "Fecha Prevista", "value": "2026-08-31"},
+                {"label": "Prioridad", "value": "URGENTE" if is_high_priority else "NORMAL"},
+                {
+                    "label": "Cliente / Destino",
+                    "value": "DISTRIBUIDORA INDUSTRIAL DEL SUR S.A.C. (RUC: 20608974512)",
+                },
+                {
+                    "label": "Dirección Entrega",
+                    "value": "Av. Los Sauces 1450, Urb. Vulcano, Ate - Lima",
+                },
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Materiales Solicitados",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="40%"
+                        ),
+                        TableColumnContext(
+                            key="requested_qty",
+                            label="Cant. Solicitada",
+                            align="right",
+                            width="15%",
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="8%"),
+                        TableColumnContext(
+                            key="notes", label="Observaciones", align="left", width="17%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={"is_urgent": is_high_priority},
+            notes="Despachar en embalaje reforzado con protección para manipulación pesada.",
+            visual_signature=VisualSignatureContext(
+                signer_name="Carlos Mendoza Paredes",
+                signer_role="Responsable Solicitante / Comercial",
+                signed_at="2026-08-30 08:30:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("ODS", "OUT_ORD", "OUTBOUND_ORDER"):
+        template_key = "outbound_order_v1"
+        st = status_code or "CREATED"
+        rows_count = 50 if is_multipage else 5
+
+        rows = [
+            {
+                "item_no": str(i),
+                "sku": f"SKU-ODS-{2000 + i}",
+                "description": (
+                    f"Suministro Industrial Calibrado Serie {chr(65 + (i % 26))} - Modelo {i:02d}"
+                ),
+                "authorized_qty": f"{(i * 10) % 100 + 5:.2f}",
+                "uom": "UN",
+                "lot_number": f"LOTE-2026-{(i % 5) + 1:02d}",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="ODS",
+                type_name="Orden de Salida / Despacho (ODS)",
+                display_code=f"PREVIEW-ODS-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Solicitud Ref", "value": f"PED-{branch_code}-2026-0001"},
+                {"label": "Fecha Programada", "value": "2026-08-30"},
+                {"label": "Autorizado Por", "value": "Ing. Roberto Alarcón Gómez"},
+                {"label": "Cliente Destino", "value": "DISTRIBUIDORA INDUSTRIAL DEL SUR S.A.C."},
+                {"label": "Prioridad", "value": "URGENTE" if is_high_priority else "NORMAL"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Materiales Autorizados para Egreso",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="42%"
+                        ),
+                        TableColumnContext(
+                            key="authorized_qty",
+                            label="Cant. Autorizada",
+                            align="right",
+                            width="15%",
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="8%"),
+                        TableColumnContext(
+                            key="lot_number", label="Lote Sugerido", align="center", width="15%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={"is_urgent": is_high_priority},
+            notes="Orden de salida autorizada para preparación en muelle principal.",
+            visual_signature=VisualSignatureContext(
+                signer_name="Ing. Roberto Alarcón Gómez",
+                signer_role="Jefe de Operaciones de Almacén",
+                signed_at="2026-08-30 09:00:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("PICK", "PICKING_LIST", "PICKING_SHEET"):
+        template_key = "picking_list_v1"
+        st = status_code or "PICKING"
+        rows_count = 50 if is_multipage else 6
+
+        rows = [
+            {
+                "item_no": str(i),
+                "location": f"Z01-P{(i % 5) + 1:02d}-R{(i % 4) + 1:02d}-N{(i % 3) + 1:02d}",
+                "sku": f"ART-PCK-{3000 + i}",
+                "description": f"Componente Mecánico Estándar Tipo {chr(65 + (i % 26))}",
+                "requested_qty": f"{(i * 8) % 80 + 2:.2f}",
+                "uom": "UN",
+                "lot_number": f"LT-2026-A{i % 4}",
+                "check": "[  ]",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="PICK",
+                type_name="Hoja / Lista de Picking",
+                display_code=f"PREVIEW-PICK-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "ODS Ref", "value": f"ODS-{branch_code}-2026-0001"},
+                {"label": "Operador Picker", "value": "Juan Carlos Huamán Quispe"},
+                {"label": "Zona / Ola", "value": "ZONA ALTA ROTACIÓN (A-01) / OLA-MANANA-2026-01"},
+                {"label": "Hora Inicio", "value": "09:15:00 UTC"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Secuencia de Recolección en Almacén",
+                    columns=[
+                        TableColumnContext(key="item_no", label="Seq", align="center", width="5%"),
+                        TableColumnContext(
+                            key="location", label="Ubicación Física", align="center", width="18%"
+                        ),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="32%"
+                        ),
+                        TableColumnContext(
+                            key="requested_qty", label="Cant. Pick", align="right", width="12%"
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="6%"),
+                        TableColumnContext(
+                            key="lot_number", label="Lote", align="center", width="6%"
+                        ),
+                        TableColumnContext(key="check", label="Conf.", align="center", width="6%"),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes=(
+                "Realizar conteo visual y confirmar código de lote antes de trasladar a "
+                "mesa de empaque."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Juan Carlos Huamán Quispe",
+                signer_role="Operador Picker Asignado",
+                signed_at="2026-08-30 09:15:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("PACK", "PACKING_LIST"):
+        template_key = "packing_list_v1"
+        st = status_code or "SEALED"
+        pkg_count = 30 if is_multipage else (6 if is_multi_package else 3)
+
+        rows = [
+            {
+                "package_no": f"CX-{i:03d}",
+                "package_type": "Caja Corrugada Doble Onda"
+                if i % 2 == 0
+                else "Pallet Estándar Madera",
+                "seal_number": f"SEAL-BOX-{i:04d}",
+                "content": f"Insumo Empacado Modelo {chr(65 + (i % 26))} (20 UN)",
+                "weight_kg": f"{18.5 + (i * 2.5):.2f} kg",
+            }
+            for i in range(1, pkg_count + 1)
+        ]
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="PACK",
+                type_name="Lista de Empaque / Packing List",
+                display_code=f"PREVIEW-PACK-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "ODS Ref", "value": f"ODS-{branch_code}-2026-0001"},
+                {"label": "Total Bultos", "value": f"{pkg_count} Cajas / Pallets"},
+                {"label": "Operador Packing", "value": "Estación de Embalaje N° 2 (Miguel Silva)"},
+                {
+                    "label": "Peso Consolidado",
+                    "value": f"{sum(18.5 + (i * 2.5) for i in range(1, pkg_count + 1)):.2f} kg",
+                },
+                {"label": "Cliente Destino", "value": "DISTRIBUIDORA INDUSTRIAL DEL SUR S.A.C."},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Distribución y Contenido por Bulto",
+                    columns=[
+                        TableColumnContext(
+                            key="package_no", label="N° Bulto", align="center", width="12%"
+                        ),
+                        TableColumnContext(
+                            key="package_type", label="Tipo Empaque", align="left", width="22%"
+                        ),
+                        TableColumnContext(
+                            key="seal_number", label="Precinto / SSCC", align="center", width="18%"
+                        ),
+                        TableColumnContext(
+                            key="content", label="Contenido", align="left", width="33%"
+                        ),
+                        TableColumnContext(
+                            key="weight_kg", label="Peso Bruto", align="right", width="15%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes="Bultos zunchados y rotulados con etiqueta térmica de trazabilidad.",
+            visual_signature=VisualSignatureContext(
+                signer_name="Miguel Silva Arteaga",
+                signer_role="Operador de Empaque y Embalaje",
+                signed_at="2026-08-30 10:15:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("MNF", "MAN", "CARGO_MANIFEST", "MANIFEST"):
+        template_key = "manifest_v1"
+        st = status_code or "LOADED"
+        order_count = 35 if is_multipage else 3
+
+        rows = [
+            {
+                "item_no": str(i),
+                "ods_ref": f"ODS-{branch_code}-2026-{1000 + i}",
+                "client_name": f"CLIENTE COMERCIAL DESTINO {chr(65 + (i % 26))} S.A.",
+                "destination_city": "LIMA CENTRO" if i % 2 == 0 else "CALLAO / VENTANILLA",
+                "packages_count": f"{(i % 4) + 1}",
+                "weight_kg": f"{(i * 45) + 80:.2f} kg",
+                "seal_number": f"PREC-{i:04d}",
+            }
+            for i in range(1, order_count + 1)
+        ]
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="MNF",
+                type_name="Manifiesto de Carga Consolidado",
+                display_code=f"PREVIEW-MNF-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {
+                    "label": "Empresa Transportista",
+                    "value": "TRANSPORTES Y CARGA EXPRÉS DEL PERÚ S.A.C. (RUC: 20556789012)",
+                },
+                {"label": "Unidad / Placa", "value": "ABC-123 (Remolque: TR-987)"},
+                {"label": "Conductor", "value": "Manuel Santos Rojas (DNI: 44556677)"},
+                {
+                    "label": "Total Pedidos / Peso",
+                    "value": (
+                        f"{order_count} Pedidos | "
+                        f"{sum((i * 45) + 80 for i in range(1, order_count + 1)):,.2f} kg"
+                    ),
+                },
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Relación Consolidada de Pedidos y Bultos Despachados",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(
+                            key="ods_ref", label="ODS Ref", align="center", width="18%"
+                        ),
+                        TableColumnContext(
+                            key="client_name",
+                            label="Cliente / Destinatario",
+                            align="left",
+                            width="32%",
+                        ),
+                        TableColumnContext(
+                            key="destination_city", label="Destino", align="left", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="packages_count", label="Bultos", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="weight_kg", label="Peso", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="seal_number", label="Precinto", align="center", width="10%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes="Manifiesto consolidado de carga para reparto en ruta metropolitana.",
+            visual_signature=VisualSignatureContext(
+                signer_name="Carlos Benavides Silva",
+                signer_role="Supervisor de Carga y Despacho",
+                signed_at="2026-08-30 11:00:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("DSP", "ADSP", "DISPATCH_GUIDE", "DISPATCH_REPORT"):
+        template_key = "dispatch_report_v1"
+        st = status_code or "EMITTED"
+
+        rows = [
+            {
+                "item_no": "1",
+                "concept": "Total Bultos / Cajas Registradas",
+                "expected": "12 Bultos",
+                "loaded": "10 Bultos" if is_diff else "12 Bultos",
+                "status": "DIFERENCIA (FALTANTE 2)" if is_diff else "CONFORME",
+            },
+            {
+                "item_no": "2",
+                "concept": "Peso Bruto Total de Mercadería",
+                "expected": "345.50 kg",
+                "loaded": "290.00 kg" if is_diff else "345.50 kg",
+                "status": "DIFERENCIA" if is_diff else "CONFORME",
+            },
+            {
+                "item_no": "3",
+                "concept": "Inspección Físico-Visual de Embalaje",
+                "expected": "100% Sellado",
+                "loaded": "100% Sellado",
+                "status": "CONFORME",
+            },
+            {
+                "item_no": "4",
+                "concept": "Colocación y Traba de Precinto de Seguridad",
+                "expected": "PREC-2026-98124",
+                "loaded": "PREC-2026-98124",
+                "status": "CONFORME",
+            },
+        ]
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="DSP",
+                type_name="Acta Oficial de Despacho",
+                display_code=f"PREVIEW-DSP-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "ODS Ref", "value": f"ODS-{branch_code}-2026-0001"},
+                {"label": "Muelle de Carga", "value": "MUELLE N° 03 (DESPACHO PESADO)"},
+                {
+                    "label": "Vehículo / Placa",
+                    "value": "ABC-123 (Conductor: Manuel Santos Rojas - DNI 44556677)",
+                },
+                {"label": "Horario de Carga", "value": "10:15 - 11:20 UTC"},
+                {"label": "Precinto Seguridad", "value": "PREC-2026-98124"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Resumen y Conformidad de Carga",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(
+                            key="concept",
+                            label="Concepto de Verificación",
+                            align="left",
+                            width="45%",
+                        ),
+                        TableColumnContext(
+                            key="expected", label="Esperado", align="right", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="loaded", label="Cargado", align="right", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="status", label="Estado", align="center", width="20%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={"has_difference": is_diff},
+            notes="Acta formal de egreso y entrega de custodia de mercadería al transportista.",
+            visual_signature=VisualSignatureContext(
+                signer_name="Carlos Benavides Silva",
+                signer_role="Supervisor de Despacho",
+                signed_at="2026-08-30 11:30:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("SEAL", "CPREC", "SEAL_CONTROL"):
+        template_key = "seal_control_v1"
+        st = status_code or "ISSUED"
+
+        rows = [
+            {
+                "item_no": "1",
+                "seal_number": "PREC-2026-98124",
+                "seal_type": "BOTELLA ALTA SEGURIDAD (ISO 17712)",
+                "applied_to": "Puerta Trasera Derecha Furgón",
+                "status": "COLOCADO CONFORME",
+            },
+            {
+                "item_no": "2",
+                "seal_number": "PREC-2026-98125",
+                "seal_type": "CABLE DE ACERO GALVANIZADO 3.5mm",
+                "applied_to": "Puerta Lateral Izquierda",
+                "status": "COLOCADO CONFORME",
+            },
+        ]
+
+        replacement_event = None
+        if is_repl:
+            replacement_event = {
+                "previous_seal": "PREC-2026-98120",
+                "new_seal": "PREC-2026-98124",
+                "reason": (
+                    "Rotura de perno de anclaje durante prueba de tensión previa a la "
+                    "salida de muelle."
+                ),
+            }
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="SEAL",
+                type_name="Acta de Control de Precintos",
+                display_code=f"PREVIEW-SEAL-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-30",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Manifiesto Ref", "value": f"MNF-{branch_code}-2026-0001"},
+                {"label": "Unidad / Placa", "value": "ABC-123"},
+                {"label": "Supervisor", "value": "Ing. Roberto Alarcón Gómez"},
+                {"label": "Fecha / Hora", "value": "2026-08-30 11:25:00 UTC"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Registro de Precintos de Seguridad Instalados",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="8%"),
+                        TableColumnContext(
+                            key="seal_number",
+                            label="Número de Serie Precinto",
+                            align="center",
+                            width="25%",
+                        ),
+                        TableColumnContext(
+                            key="seal_type", label="Tipo de Precinto", align="left", width="27%"
+                        ),
+                        TableColumnContext(
+                            key="applied_to",
+                            label="Ubicación de Colocación",
+                            align="left",
+                            width="25%",
+                        ),
+                        TableColumnContext(
+                            key="status", label="Estado", align="center", width="15%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={"replacement_event": replacement_event},
+            notes="Precintos colocados y verificados con traba mecánica de alta seguridad.",
+            visual_signature=VisualSignatureContext(
+                signer_name="Ing. Roberto Alarcón Gómez",
+                signer_role="Supervisor de Seguridad y Control Patrimonial",
+                signed_at="2026-08-30 11:30:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Código documental de salida no soportado: {doc_code}. "
+                "Soportados: OUT_REQ (PED), ODS, PICK, PACK, MNF (MAN), DSP (ADSP), SEAL (CPREC)."
+            ),
+        )
+
+
+@router.post(
+    "/document-renderer/outbound/{doc_code}/sample",
+    summary="Generate canonical sample preview for outbound document types",
+    dependencies=[Depends(require_permission("document_templates.preview"))],
+)
+def render_outbound_sample_document(
+    doc_code: str,
+    scenario: str = Query(
+        "basic",
+        description=(
+            "Scenario: basic, multipage, high_priority, multi_package, with_difference, replacement"
+        ),
+    ),
+    status_code: Optional[str] = Query(
+        None,
+        description=(
+            "Document status (e.g. READY, CREATED, PICKING, SEALED, LOADED, EMITTED, ISSUED)"
+        ),
+    ),
+    format: str = Query("pdf", description="Output format: pdf or html"),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    db: Session = Depends(get_db),
+):
+    """Renders canonical synthetic preview for outbound package documents (F018)."""
+    branch_name = "Sede Principal Lima"
+    branch_code = "LIM"
+    org_name = "Organización Logística Integral del Perú"
+    tax_id = "20100012345"
+    branch_address = "Av. Industrial 456, Parque Logístico, Callao, Lima"
+
+    if principal.organization_id:
+        from app.modules.organization.models import Branch, Organization
+
+        org = db.query(Organization).filter(Organization.id == principal.organization_id).first()
+        if org:
+            org_name = org.name
+        branch = (
+            db.query(Branch).filter(Branch.organization_id == principal.organization_id).first()
+        )
+        if branch:
+            branch_name = branch.name
+            branch_code = branch.code
+            if branch.location and branch.location.address_line1:
+                branch_address = branch.location.address_line1
+
+    ctx, template_key = build_outbound_sample_context(
+        doc_code=doc_code,
+        scenario=scenario,
+        status_code=status_code,
+        org_name=org_name,
+        tax_id=tax_id,
+        branch_name=branch_name,
+        branch_code=branch_code,
+        branch_address=branch_address,
+        user_email=principal.email,
+    )
+
+    service = DocumentRenderingService()
+    pdf_bytes, html_content, snapshot_hash, pdf_hash = service.process_and_render(
+        context=ctx,
+        template_key=template_key,
+    )
+
+    headers = {
+        "X-Snapshot-Hash": snapshot_hash,
+        "X-Pdf-Hash": pdf_hash,
+        "X-Template-Key": template_key,
+        "X-Document-Type": doc_code.upper(),
+        "X-Renderer-Name": "WeasyPrint",
+        "X-Renderer-Version": "69.0",
+    }
+
+    if format.lower() == "html":
+        return HTMLResponse(content=html_content, headers=headers)
+
+    filename = f"{ctx.document.display_code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            **headers,
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )

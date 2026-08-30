@@ -316,6 +316,103 @@ class TemplateRegistry:
             supported_statuses=["RECEIVED", "DISCREPANCY_FOUND", "CLOSED"],
             created_at="2026-08-29T00:00:00Z",
         ),
+        # Outbound (F018)
+        "outbound_request_v1": TemplateManifest(
+            template_key="outbound_request_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Solicitud de Salida de Almacén",
+            description="Pedido interno o comercial de despacho de mercadería.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "PENDING_PICKING", "IN_PREPARATION", "READY", "CANCELLED"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
+        "outbound_order_v1": TemplateManifest(
+            template_key="outbound_order_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Orden de Salida / Despacho",
+            description="Instrucción formal de preparación y egreso físico de existencias.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["CREATED", "IN_PROCESS", "DISPATCHED", "VOID"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
+        "picking_list_v1": TemplateManifest(
+            template_key="picking_list_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Hoja / Lista de Picking",
+            description="Ruta óptima de recolección de artículos por pasillo y nivel en almacén.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["PENDING", "PICKING", "COMPLETED", "SHORT_PICKED"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
+        "packing_list_v1": TemplateManifest(
+            template_key="packing_list_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Lista de Empaque / Packing List",
+            description="Detalle de embalaje, peso neto/bruto y distribución de cajas y bultos.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "SEALED", "VOID"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
+        "manifest_v1": TemplateManifest(
+            template_key="manifest_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Manifiesto de Carga",
+            description=(
+                "Relación consolidada de todos los bultos y pedidos asignados a una unidad de "
+                "transporte."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["GENERATED", "LOADED", "IN_TRANSIT", "CLOSED"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
+        "dispatch_report_v1": TemplateManifest(
+            template_key="dispatch_report_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Guía de Salida / Despacho",
+            description="Documento de constancia de egreso de almacén para control y custodia.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["EMITTED", "CANCELLED"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
+        "seal_control_v1": TemplateManifest(
+            template_key="seal_control_v1",
+            family="outbound",
+            version="1.0.0",
+            title="Acta de Control de Precintos",
+            description=(
+                "Registro de números de serie de precintos de seguridad colocados en furgón."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "ISSUED", "VERIFIED", "VOID"],
+            created_at="2026-08-30T00:00:00Z",
+        ),
     }
 
     _template_files: Dict[str, str] = {
@@ -350,6 +447,17 @@ class TemplateRegistry:
         "warehouse_transfer_v1": "inventory/warehouse_transfer_v1.html",
         "transfer_request_v1": "inventory/warehouse_transfer_v1.html",
         "transfer_receipt_v1": "inventory/transfer_receipt_v1.html",
+        # Outbound
+        "outbound_request_v1": "outbound/outbound_request_v1.html",
+        "outbound_order_v1": "outbound/outbound_order_v1.html",
+        "picking_list_v1": "outbound/picking_list_v1.html",
+        "picking_sheet_v1": "outbound/picking_list_v1.html",
+        "packing_list_v1": "outbound/packing_list_v1.html",
+        "manifest_v1": "outbound/manifest_v1.html",
+        "cargo_manifest_v1": "outbound/manifest_v1.html",
+        "dispatch_report_v1": "outbound/dispatch_report_v1.html",
+        "dispatch_guide_v1": "outbound/dispatch_report_v1.html",
+        "seal_control_v1": "outbound/seal_control_v1.html",
     }
 
     @classmethod
@@ -378,6 +486,12 @@ class TemplateRegistry:
             resolved_key = "physical_count_v1"
         elif template_key == "transfer_request_v1":
             resolved_key = "warehouse_transfer_v1"
+        elif template_key == "picking_sheet_v1":
+            resolved_key = "picking_list_v1"
+        elif template_key == "cargo_manifest_v1":
+            resolved_key = "manifest_v1"
+        elif template_key == "dispatch_guide_v1":
+            resolved_key = "dispatch_report_v1"
 
         if resolved_key not in cls._manifests:
             raise DomainError(

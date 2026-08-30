@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ document.display_code }} - Orden de Salida / Despacho (ODS)</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 15mm 15mm 20mm 15mm;
+      @bottom-left {
+        content: "Sistema Logístico Integral • Despacho y Salidas";
+        font-size: 8pt;
+        color: #64748b;
+        font-family: sans-serif;
+      }
+      @bottom-right {
+        content: "Página " counter(page) " de " counter(pages);
+        font-size: 8pt;
+        color: #64748b;
+        font-family: sans-serif;
+      }
+    }
+    body {
+      font-family: 'Liberation Sans', Arial, sans-serif;
+      font-size: 9pt;
+      line-height: 1.35;
+      color: #0f172a;
+      margin: 0;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 8px;
+    }
+    .doc-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 8pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      background-color: #e0f2fe;
+      color: #0369a1;
+      margin-top: 4px;
+    }
+    .priority-banner {
+      background-color: #fee2e2;
+      border: 1px solid #ef4444;
+      color: #991b1b;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 8.5pt;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+    .replacement-banner {
+      background-color: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 8.5pt;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+    .summary-grid {
+      display: table;
+      width: 100%;
+      margin-bottom: 14px;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .summary-row { display: table-row; }
+    .summary-cell {
+      display: table-cell;
+      padding: 4px 8px;
+      font-size: 8.5pt;
+      width: 50%;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      margin-bottom: 14px;
+    }
+    .items-table th {
+      background-color: #0f172a;
+      color: #ffffff;
+      font-weight: bold;
+      font-size: 8pt;
+      padding: 6px 8px;
+      text-align: left;
+      border: 1px solid #0f172a;
+    }
+    .items-table td {
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 8.5pt;
+    }
+    .items-table tr:nth-child(even) { background-color: #f8fafc; }
+    .watermark {
+      position: absolute;
+      top: 40%;
+      left: 15%;
+      right: 15%;
+      font-size: 44pt;
+      font-weight: 900;
+      color: rgba(239, 68, 68, 0.16);
+      text-align: center;
+      transform: rotate(-30deg);
+      pointer-events: none;
+      z-index: 100;
+    }
+</style>
+</head>
+<body>
+  {% if watermark_text %}
+  <div class="watermark">{{ watermark_text }}</div>
+  {% endif %}
+
+  <table class="header-table">
+    <tr>
+      <td style="width: 70%;">
+        <div style="font-size: 14pt; font-weight: bold; color: #0f172a;">{{ organization.name }}</div>
+        <div style="font-size: 9pt; color: #475569;">RUC / Tax ID: {{ organization.tax_id }} | {{ branch.name }}</div>
+        <div style="font-size: 12pt; font-weight: 700; color: #0369a1; margin-top: 4px;">{{ document.type_name }}</div>
+      </td>
+      <td style="width: 30%; text-align: right;">
+        <div style="font-family: monospace; font-size: 11pt; font-weight: bold;">{{ document.display_code }}</div>
+        <div><span class="doc-badge">{{ document.status }}</span></div>
+        <div style="font-size: 8pt; color: #64748b; margin-top: 4px;">Emisión: {{ document.emission_date | default("2026-08-30") }}</div>
+      </td>
+    </tr>
+  </table>
+
+  {% if custom_content.is_urgent %}<div class="priority-banner">🚨 ODS PRIORIDAD ALTA</div>{% endif %}
+
+  <div class="summary-grid">
+    {% for field in summary_fields %}
+    <div class="summary-row">
+      <div class="summary-cell"><strong>{{ field.label }}:</strong> {{ field.value }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if tables and tables[0] %}
+  {% if tables[0].title %}
+  <div style="font-size: 9.5pt; font-weight: bold; color: #0369a1; margin: 10px 0 4px 0; text-transform: uppercase;">{{ tables[0].title }}</div>
+  {% endif %}
+  <table class="items-table">
+    <thead>
+      <tr>
+        {% for col in tables[0].columns %}
+        <th style="width: {{ col.width | default('auto') }}; text-align: {{ col.align | default('left') }};">{{ col.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in tables[0].rows %}
+      <tr>
+        {% for col in tables[0].columns %}
+        <td style="text-align: {{ col.align | default('left') }};">{{ row[col.key] | default("-") }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if notes %}
+  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; margin-top: 10px; font-size: 8.5pt;">
+    <strong>Instrucciones y Observaciones:</strong> {{ notes }}
+  </div>
+  {% endif %}
+
+  <table style="width: 100%; border-collapse: collapse; margin-top: 25px;">
+    <tr>
+      <td style="width: 35%; text-align: center; padding: 10px;">
+        <div style="border-top: 1px solid #0f172a; padding-top: 4px;">
+          <strong>{{ visual_signature.signer_name if visual_signature else "Responsable Operativo" }}</strong><br />
+          <span style="font-size: 8pt; color: #475569;">{{ visual_signature.signer_role if visual_signature else "Supervisor de Almacén" }}</span>
+        </div>
+      </td>
+      <td style="width: 35%; text-align: center; padding: 10px;">
+        <div style="border-top: 1px solid #0f172a; padding-top: 4px;">
+          <strong>Control y Custodia</strong><br />
+          <span style="font-size: 8pt; color: #475569;">Firma de Aprobación</span>
+        </div>
+      </td>
+      <td style="width: 30%; text-align: right; padding: 10px;">
+        {% if qr_data_uri %}
+        <img src="{{ qr_data_uri }}" alt="QR Code" style="width: 24mm; height: 24mm;" />
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
