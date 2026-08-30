@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ document.display_code }} - Etiqueta de Ubicación</title>
+  <style>
+    @page {
+      size: 100mm 150mm;
+      margin: 5mm;
+      @bottom-center {
+        content: "Sistema Logístico Integral • Identificador Físico WMS";
+        font-size: 7pt;
+        color: #64748b;
+        font-family: sans-serif;
+      }
+    }
+    body {
+      font-family: 'Liberation Sans', Arial, sans-serif;
+      font-size: 9pt;
+      line-height: 1.2;
+      color: #0f172a;
+      margin: 0;
+      padding: 4mm;
+      box-sizing: border-box;
+      border: 2px solid #0f172a;
+      border-radius: 4px;
+      height: 136mm;
+      position: relative;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 3mm;
+      margin-bottom: 3mm;
+    }
+    .org-name {
+      font-size: 8pt;
+      font-weight: bold;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .wh-title {
+      font-size: 11pt;
+      font-weight: 900;
+      color: #0f172a;
+      margin-top: 1mm;
+    }
+    .location-banner {
+      background-color: #0f172a;
+      color: #ffffff;
+      text-align: center;
+      padding: 4mm 2mm;
+      border-radius: 4px;
+      margin-bottom: 3mm;
+    }
+    .loc-label {
+      font-size: 7pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .loc-code {
+      font-size: 15pt;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-top: 1mm;
+      font-family: monospace;
+    }
+    .grid-coords {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 3mm;
+      text-align: center;
+    }
+    .grid-coords th {
+      background-color: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      font-size: 7pt;
+      padding: 1.5mm;
+      color: #475569;
+      text-transform: uppercase;
+    }
+    .grid-coords td {
+      border: 1px solid #cbd5e1;
+      font-size: 11pt;
+      font-weight: bold;
+      padding: 2mm 1mm;
+      color: #0f172a;
+    }
+    .qr-section {
+      text-align: center;
+      margin-top: 2mm;
+      padding: 2mm;
+      border: 1px dashed #94a3b8;
+      border-radius: 4px;
+      background-color: #fafafa;
+    }
+    .qr-img {
+      width: 32mm;
+      height: 32mm;
+      display: block;
+      margin: 0 auto;
+    }
+    .barcode-text {
+      font-family: monospace;
+      font-size: 8pt;
+      font-weight: bold;
+      color: #334155;
+      margin-top: 1mm;
+    }
+    .specs-box {
+      margin-top: 2mm;
+      font-size: 7.5pt;
+      color: #475569;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 2mm;
+    }
+    .specs-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 1mm;
+    }
+    .watermark {
+      position: absolute;
+      top: 40%;
+      left: 5%;
+      right: 5%;
+      font-size: 26pt;
+      font-weight: 900;
+      color: rgba(239, 68, 68, 0.22);
+      text-align: center;
+      transform: rotate(-30deg);
+      pointer-events: none;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  {% if watermark_text %}
+  <div class="watermark">{{ watermark_text }}</div>
+  {% endif %}
+
+  <div class="header">
+    <div class="org-name">{{ organization.name }}</div>
+    <div class="wh-title">🏷️ {{ custom_content.location.warehouse_name | default("ALMACÉN CENTRAL") }}</div>
+  </div>
+
+  <div class="location-banner">
+    <div class="loc-label">UBICACIÓN CANÓNICA WMS</div>
+    <div class="loc-code">{{ custom_content.location.location_code | default(document.display_code) }}</div>
+  </div>
+
+  <table class="grid-coords">
+    <thead>
+      <tr>
+        <th>Zona</th>
+        <th>Pasillo</th>
+        <th>Rack</th>
+        <th>Nivel</th>
+        <th>Posición</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ custom_content.location.zone_code | default("Z-01") }}</td>
+        <td>{{ custom_content.location.aisle | default("P-01") }}</td>
+        <td>{{ custom_content.location.rack | default("R-02") }}</td>
+        <td>{{ custom_content.location.level | default("N-03") }}</td>
+        <td>{{ custom_content.location.position | default("POS-1") }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="qr-section">
+    {% if qr_data_uri %}
+    <img src="{{ qr_data_uri }}" alt="QR Ubicación" class="qr-img" />
+    {% endif %}
+    <div class="barcode-text">*{{ custom_content.location.location_code | default(document.display_code) }}*</div>
+  </div>
+
+  <div class="specs-box">
+    <div class="specs-row">
+      <span><strong>Tipo:</strong> {{ custom_content.location.location_type | default("RACK STANDARD PALLET") }}</span>
+      <span><strong>Capacidad:</strong> {{ custom_content.location.capacity_kg | default("1,500 KG") }}</span>
+    </div>
+    <div class="specs-row">
+      <span><strong>Estado:</strong> {{ document.status }}</span>
+      <span><strong>Emisión:</strong> {{ document.emission_date | default("2026-08-29") }}</span>
+    </div>
+  </div>
+</body>
+</html>

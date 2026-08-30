@@ -24,14 +24,14 @@ class Settings(BaseSettings):
 
     # Session & Cookie Security (F008)
     SESSION_COOKIE_NAME: str = "logistics_session"
-    SESSION_COOKIE_SECURE: bool = True
+    SESSION_COOKIE_SECURE: bool = False
     SESSION_COOKIE_SAMESITE: str = "none"
     SESSION_ABSOLUTE_TTL_MINUTES: int = 480
     SESSION_IDLE_TIMEOUT_MINUTES: int = 30
 
     # CSRF & Bootstrap Secrets (Backend only, never in Git/Frontend)
     CSRF_SIGNING_SECRET: str = "dev-csrf-secret-key-32-chars-minimum-entropy!!"
-    DEMO_USER_PASSWORD: str = "jesusanthony01"
+    DEMO_USER_PASSWORD: str = "DemoSecurePass2026_9x!Lp"
 
     # MFA & Step-Up Security (F009)
     MFA_ENCRYPTION_KEY: str = "K7gNU3sdo+OL0w1g5xV7l4k9a2j5h6P8Q1w2e3r4t5Y="

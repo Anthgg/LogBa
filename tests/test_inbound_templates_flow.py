@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from pypdf import PdfReader
 
+from app.core.config import get_settings
 from app.core.errors import DomainError
 from app.main import app
 from app.modules.auth.csrf import generate_csrf_token
@@ -32,6 +33,8 @@ from app.shared.documents.schemas.context import (
 from app.shared.documents.service import DocumentRenderingService
 from app.shared.documents.templates.registry import TemplateRegistry
 
+settings = get_settings()
+
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
@@ -40,7 +43,7 @@ def client() -> TestClient:
     csrf = generate_csrf_token()
     login_res = c.post(
         "/api/auth/login",
-        json={"email": "gerencia.demo@logistica.local", "password": "jesusanthony01"},
+        json={"email": "gerencia.demo@logistica.local", "password": settings.DEMO_USER_PASSWORD},
         headers={"X-CSRF-Token": csrf},
     )
     assert login_res.status_code == 200, f"Login failed: {login_res.text}"

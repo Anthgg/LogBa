@@ -2289,3 +2289,668 @@ def render_receiving_sample_document(
             "Content-Disposition": f'inline; filename="{filename}"',
         },
     )
+
+
+# ============================================================================
+# F017: INVENTORY DOCUMENT SAMPLES & PREVIEW SCENARIOS
+# ============================================================================
+
+
+def build_inventory_sample_context(
+    doc_code: str,
+    scenario: str = "basic",
+    status_code: Optional[str] = None,
+    org_name: str = "Organización Logística Integral del Perú",
+    tax_id: str = "20100012345",
+    branch_name: str = "Sede Principal Lima",
+    branch_code: str = "LIM",
+    branch_address: str = "Av. Industrial 456, Parque Logístico, Callao, Lima",
+    user_email: str = "gerencia.demo@logistica.local",
+) -> Tuple[DocumentRenderContext, str]:
+    """Builds realistic synthetic preview context for the 7 inventory documents (F017)."""
+    code_upper = doc_code.upper().strip()
+    is_multi = scenario.lower() in ("multipage", "multi")
+    is_long = scenario.lower() in ("long_text", "long")
+    is_blind = scenario.lower() in ("blind", "blind_count", "ciego")
+    is_diff = scenario.lower() in ("difference", "with_differences", "discrepancy")
+    rows_count = 50 if is_multi else (20 if is_long else 6)
+
+    org_ctx = OrganizationHeaderContext(name=org_name, code="ORG-01", tax_id=tax_id)
+    branch_ctx = BranchHeaderContext(name=branch_name, code=branch_code, address=branch_address)
+
+    if code_upper in ("LBL", "LOCATION_LABEL"):
+        st = status_code.upper() if status_code else "ACTIVE"
+        template_key = "location_label_v1"
+        loc_code = (
+            "ALM01-SECTOR-A-PASILLO-01-RACK-02-NIVEL-03-POS-01"
+            if is_long
+            else "ALM01-Z-A-P01-R02-N03"
+        )
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="LBL",
+                type_name="Etiqueta de Ubicación / Pallet",
+                display_code=loc_code,
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Almacén", "value": "Almacén Central de Materias Primas"},
+                {"label": "Zona / Sector", "value": "Sector A (Refractarios & Minerales)"},
+                {"label": "Pasillo / Rack", "value": "Pasillo 01 • Rack R-02"},
+                {"label": "Nivel / Posición", "value": "Nivel N-03 • Posición P-01"},
+            ],
+            custom_content={
+                "location": {
+                    "warehouse_name": "ALMACÉN CENTRAL DE MATERIAS PRIMAS",
+                    "location_code": loc_code,
+                    "zone_code": "SECTOR-A",
+                    "aisle": "P-01",
+                    "rack": "R-02",
+                    "level": "N-03",
+                    "position": "POS-1",
+                    "location_type": "RACK HEAVY DUTY PALLET",
+                    "capacity_kg": "2,000 KG",
+                }
+            },
+            notes="Etiqueta física de código de ubicación WMS. Lectura QR validada.",
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("MOV", "INVENTORY_MOVEMENT"):
+        st = status_code.upper() if status_code else "EXECUTED"
+        template_key = "inventory_movement_v1"
+        rows = [
+            {
+                "item_no": str(i),
+                "sku": f"MAT-REF-{i:04d}",
+                "description": (
+                    f"Greda refractaria formulada estándar grado {i} para fundición industrial"
+                    if is_long
+                    else f"Ladrillo refractario de alta alúmina AL-{i:02d}"
+                ),
+                "source_location": f"Z-01-P01-R0{i % 3 + 1}-N01",
+                "target_location": f"Z-02-P04-R0{i % 3 + 1}-N02",
+                "quantity": f"{i * 25.0:.2f}",
+                "uom": "UND" if i % 2 == 0 else "KG",
+                "lot_number": f"LOTE-202608-{i:03d}",
+                "notes": "Reubicación por optimización de pasillo",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="MOV",
+                type_name="Movimiento Interno de Inventario",
+                display_code=f"PREVIEW-MOV-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Tipo de Movimiento", "value": "REUBICACIÓN INTERNA DE STOCK (SLOTTING)"},
+                {"label": "Almacén", "value": "Almacén Central Callao (ALM-01)"},
+                {"label": "Operador Responsable", "value": "Juan Pérez (Operador WMS)"},
+                {"label": "Referencia Operativa", "value": "TASK-WMS-20260829-8812"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Existencias Reubicadas",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="30%"
+                        ),
+                        TableColumnContext(
+                            key="source_location", label="Origen", align="center", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="target_location", label="Destino", align="center", width="15%"
+                        ),
+                        TableColumnContext(
+                            key="quantity", label="Cantidad", align="right", width="10%"
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="10%"),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes=(
+                "Movimiento interno ejecutado según directivas de balance de carga de estantería. "
+                "Registrado en log inmutable del sistema."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name=user_email,
+                signer_role="Operador WMS / Almacenes",
+                signed_at="2026-08-29 11:30:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("INV_ADJ", "ADJ", "INVENTORY_ADJUSTMENT"):
+        st = status_code.upper() if status_code else "APPROVED"
+        template_key = "inventory_adjustment_v1"
+        rows = [
+            {
+                "item_no": str(i),
+                "sku": f"MAT-INS-{i:04d}",
+                "description": f"Cemento refractario fraguado rápido tipo CR-{i:02d}",
+                "location": f"Z-01-P02-R01-N0{i % 4 + 1}",
+                "qty_before": f"{100.0 + i * 10:.2f}",
+                "adj_qty": f"{-(i * 2.0):.2f}" if i % 2 == 0 else f"{i * 1.5:.2f}",
+                "qty_after": f"{(100.0 + i * 10) + (-(i * 2.0) if i % 2 == 0 else i * 1.5):.2f}",
+                "uom": "BOL",
+                "unit_cost": f"S/ {45.00 + i * 5:.2f}",
+                "total_impact": (
+                    f"S/ {abs((-(i * 2.0) if i % 2 == 0 else i * 1.5) * (45.00 + i * 5)):.2f}"
+                ),
+                "reason": (
+                    "MERMA POR ROTURA DE ENVASE" if i % 2 == 0 else "REGULARIZACIÓN SOBRANTE"
+                ),
+            }
+            for i in range(1, rows_count + 1)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="INV_ADJ",
+                type_name="Acta Oficial de Ajuste de Inventario",
+                display_code=f"PREVIEW-ADJ-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {
+                    "label": "Tipo de Ajuste",
+                    "value": "AJUSTE POR MERMA / DESMEDRO Y REGULARIZACIÓN",
+                },
+                {"label": "Almacén Afectado", "value": "Almacén Central Callao (ALM-01)"},
+                {"label": "Motivo / Causa", "value": "Inspección técnica trimestral de integridad"},
+                {"label": "Autorización Step-Up", "value": "TOKEN MFA VALIDADO #9921-CALLAO"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Existencias Ajustadas",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="4%"),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="12%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="22%"
+                        ),
+                        TableColumnContext(
+                            key="location", label="Ubicación", align="center", width="12%"
+                        ),
+                        TableColumnContext(
+                            key="qty_before", label="Antes", align="right", width="8%"
+                        ),
+                        TableColumnContext(
+                            key="adj_qty", label="Ajuste", align="right", width="8%"
+                        ),
+                        TableColumnContext(
+                            key="qty_after", label="Después", align="right", width="8%"
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="6%"),
+                        TableColumnContext(
+                            key="total_impact", label="Impacto (S/)", align="right", width="10%"
+                        ),
+                        TableColumnContext(key="reason", label="Motivo", align="left", width="10%"),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "step_up_ref": "MFA-AUTH-20260829-9921-GERENCIA",
+                "total_impact_str": "S/ 3,845.50 PEN",
+            },
+            notes=(
+                "El presente ajuste cuenta con aprobación de Gerencia de Operaciones tras "
+                "la constatación de mermas operativas durante el traslado interno. "
+                "Se adjuntan informes fotográficos en el expediente digital."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Ing. Roberto Sánchez Velarde",
+                signer_role="Gerente de Logística y Operaciones",
+                signed_at="2026-08-29 14:00:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("CNT", "STOCK_COUNT", "PHYSICAL_COUNT"):
+        st = status_code.upper() if status_code else "IN_PROGRESS"
+        template_key = "physical_count_v1"
+        # In Blind count mode, system_qty is omitted!
+        rows = []
+        for i in range(1, rows_count + 1):
+            row_dict = {
+                "item_no": str(i),
+                "location": f"Z-01-P01-R0{i % 3 + 1}-N0{i % 4 + 1}",
+                "sku": f"MAT-MIN-{i:04d}",
+                "description": f"Mineral refractario concentrado tipo M-{i:02d}",
+                "uom": "KG",
+                "lot_number": f"L-2026-{i:03d}",
+                "counted_qty": f"{i * 100.0:.2f}" if not is_blind else "",
+                "observations": "Conforme" if i % 3 != 0 else "Reconteo sugerido",
+            }
+            if not is_blind:
+                row_dict["system_qty"] = f"{i * 100.0 + (0 if i % 3 != 0 else 5.0):.2f}"
+            rows.append(row_dict)
+
+        cols = [
+            TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+            TableColumnContext(key="location", label="Ubicación", align="center", width="15%"),
+            TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+            TableColumnContext(
+                key="description", label="Descripción del Ítem", align="left", width="30%"
+            ),
+            TableColumnContext(key="uom", label="U.M.", align="center", width="7%"),
+            TableColumnContext(key="lot_number", label="Lote", align="center", width="13%"),
+        ]
+        if not is_blind:
+            cols.append(
+                TableColumnContext(key="system_qty", label="Teórico", align="right", width="10%")
+            )
+        cols.append(
+            TableColumnContext(key="counted_qty", label="Conteo Físico", align="right", width="15%")
+        )
+
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="CNT",
+                type_name="Planilla de Conteo Físico / Inventario Cíclico",
+                display_code=f"PREVIEW-CNT-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Tipo de Conteo", "value": "INVENTARIO CÍCLICO POR ZONAS (WALL-TO-WALL)"},
+                {"label": "Almacén / Sector", "value": "Almacén Central Callao • Zona 01"},
+                {
+                    "label": "Auditor Responsable",
+                    "value": "Lic. Martín Paredes (Auditoría Interna)",
+                },
+                {"label": "Ronda de Conteo", "value": "Ronda 1 (Toma Principal)"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Planilla de Verificación Física de Existencias",
+                    columns=cols,
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "blind_count": is_blind,
+            },
+            notes=(
+                "Planilla de recuento físico en almacén. El auditor debe consignar las cantidades "
+                "físicas verificadas en cada posición de almacenamiento."
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("CDIFF", "COUNT_DIFFERENCE"):
+        st = status_code.upper() if status_code else "DRAFT"
+        template_key = "count_difference_v1"
+        rows = [
+            {
+                "item_no": str(i),
+                "location": f"Z-01-P01-R01-N0{i:02d}",
+                "sku": f"MAT-DIF-{i:04d}",
+                "description": f"Insumo químico aditivo industrial QD-{i:02d}",
+                "uom": "GL",
+                "system_qty": f"{100.0:.2f}",
+                "counted_qty": f"{95.0 if i % 2 == 0 else 104.0:.2f}",
+                "difference_qty": f"{-5.0 if i % 2 == 0 else 4.0:.2f}",
+                "diff_type": "FALTANTE" if i % 2 == 0 else "SOBRANTE",
+                "unit_cost": f"S/ {80.00:.2f}",
+                "total_variance": f"S/ {-400.00 if i % 2 == 0 else 320.00:.2f}",
+                "justification": "Evaporación / Merma física"
+                if i % 2 == 0
+                else "Error en digitación anterior",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="CDIFF",
+                type_name="Acta de Diferencias de Conteo Físico",
+                display_code=f"PREVIEW-CDIFF-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Conteo Físico Origen", "value": f"CNT-{branch_code}-2026-000045"},
+                {"label": "Almacén", "value": "Almacén Central Callao (ALM-01)"},
+                {"label": "Total Ítems con Desviación", "value": f"{len(rows)} Ítems Observados"},
+                {"label": "Impacto Neto Valorizado", "value": "- S/ 80.00 PEN (Neto Faltante)"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Matriz de Desviaciones Teórico vs Conteo Físico",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="4%"),
+                        TableColumnContext(
+                            key="location", label="Ubicación", align="center", width="12%"
+                        ),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="12%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="22%"
+                        ),
+                        TableColumnContext(
+                            key="system_qty", label="Teórico", align="right", width="8%"
+                        ),
+                        TableColumnContext(
+                            key="counted_qty", label="Físico", align="right", width="8%"
+                        ),
+                        TableColumnContext(
+                            key="difference_qty", label="Dif.", align="right", width="8%"
+                        ),
+                        TableColumnContext(
+                            key="diff_type", label="Tipo", align="center", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="total_variance", label="Valorizado", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="justification", label="Justificación", align="left", width="14%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            notes=(
+                "Acta de conciliación técnica de inventario físico. Las desviaciones requieren "
+                "sustento formal antes de proceder con el acta de ajuste correspondiente."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Lic. Martín Paredes",
+                signer_role="Auditor de Control de Inventarios",
+                signed_at="2026-08-29 17:00:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("TRF", "TRANSFER_REQUEST", "WAREHOUSE_TRANSFER"):
+        st = status_code.upper() if status_code else "IN_TRANSIT"
+        template_key = "warehouse_transfer_v1"
+        rows = [
+            {
+                "item_no": str(i),
+                "sku": f"MAT-TRF-{i:04d}",
+                "description": f"Carga paletizada de insumo refractario IP-{i:02d}",
+                "requested_qty": f"{i * 50.0:.2f}",
+                "dispatched_qty": f"{i * 50.0:.2f}",
+                "uom": "UND",
+                "lot_number": f"LOTE-TRF-{i:03d}",
+                "origin_location": f"ALM01-Z01-R0{i % 3 + 1}",
+                "dest_location": "ALM02-REC-ZONA",
+                "weight_kg": f"{i * 250.0:.1f} KG",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="TRF",
+                type_name="Solicitud de Transferencia entre Almacenes",
+                display_code=f"PREVIEW-TRF-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Almacén Origen", "value": "Almacén Central Callao (ALM-01)"},
+                {"label": "Almacén Destino", "value": "Almacén Regional Sur Arequipa (ALM-02)"},
+                {
+                    "label": "Transportista / Placa",
+                    "value": "Transportes Rápidos del Sur • V3B-891",
+                },
+                {"label": "Fecha Límite de Arribo", "value": "2026-08-31 18:00 UTC"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Detalle de Existencias a Transferir",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="30%"
+                        ),
+                        TableColumnContext(
+                            key="requested_qty", label="Sol.", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="dispatched_qty", label="Desp.", align="right", width="10%"
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="8%"),
+                        TableColumnContext(
+                            key="lot_number", label="Lote", align="center", width="12%"
+                        ),
+                        TableColumnContext(
+                            key="weight_kg", label="Peso Est.", align="right", width="10%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "transfer": {
+                    "origin_wh": "ALMACÉN CENTRAL CALLAO (ALM-01)",
+                    "dest_wh": "ALMACÉN REGIONAL SUR AREQUIPA (ALM-02)",
+                }
+            },
+            notes=(
+                "Orden de traslado inter-sucursales sujeta a verificación en punto de control "
+                "de puerta y recepción conforme en almacén de destino."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Carlos Benavides Silva",
+                signer_role="Supervisor de Despacho y Flota",
+                signed_at="2026-08-29 15:30:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    elif code_upper in ("TRF_REC", "TREC", "TRANSFER_RECEIPT"):
+        st = status_code.upper() if status_code else "RECEIVED"
+        template_key = "transfer_receipt_v1"
+        rows = [
+            {
+                "item_no": str(i),
+                "sku": f"MAT-TRF-{i:04d}",
+                "description": f"Carga paletizada de insumo refractario IP-{i:02d}",
+                "sent_qty": f"{i * 50.0:.2f}",
+                "received_qty": f"{i * 50.0 - (2.0 if is_diff and i == 1 else 0.0):.2f}",
+                "difference_qty": f"{-2.0 if is_diff and i == 1 else 0.0:.2f}",
+                "uom": "UND",
+                "condition": "CONFORME" if not (is_diff and i == 1) else "DAÑADO / FALTANTE",
+                "lot_number": f"LOTE-TRF-{i:03d}",
+                "observations": "Recibido en buen estado"
+                if not (is_diff and i == 1)
+                else "Envase roto en tránsito",
+            }
+            for i in range(1, rows_count + 1)
+        ]
+        ctx = DocumentRenderContext(
+            organization=org_ctx,
+            branch=branch_ctx,
+            document=DocumentHeaderContext(
+                type_code="TRF_REC",
+                type_name="Acta de Recepción de Transferencia",
+                display_code=f"PREVIEW-TREC-{branch_code}-2026-0001",
+                status=st,
+                version_number=1,
+                emission_date="2026-08-29",
+            ),
+            metadata=DocumentMetadataContext(generated_by=user_email, template_key=template_key),
+            summary_fields=[
+                {"label": "Transferencia Relacionada", "value": f"TRF-{branch_code}-2026-000088"},
+                {"label": "Almacén Remitente", "value": "Almacén Central Callao (ALM-01)"},
+                {"label": "Almacén Receptor", "value": "Almacén Regional Sur Arequipa (ALM-02)"},
+                {"label": "Guía de Remisión Transportista", "value": "GRT-001-0004912"},
+            ],
+            tables=[
+                DocumentTableContext(
+                    title="Confrontación de Cantidades Despachadas vs Recibidas",
+                    columns=[
+                        TableColumnContext(key="item_no", label="#", align="center", width="5%"),
+                        TableColumnContext(key="sku", label="SKU", align="center", width="15%"),
+                        TableColumnContext(
+                            key="description", label="Descripción", align="left", width="28%"
+                        ),
+                        TableColumnContext(
+                            key="sent_qty", label="Enviado", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="received_qty", label="Recibido", align="right", width="10%"
+                        ),
+                        TableColumnContext(
+                            key="difference_qty", label="Dif.", align="right", width="8%"
+                        ),
+                        TableColumnContext(key="uom", label="U.M.", align="center", width="7%"),
+                        TableColumnContext(
+                            key="condition", label="Estado", align="center", width="17%"
+                        ),
+                    ],
+                    rows=rows,
+                )
+            ],
+            custom_content={
+                "has_discrepancies": is_diff,
+                "discrepancy_summary": (
+                    "Se detectó 1 ítem con faltante/daño físico al momento de abrir el precinto. "
+                    "Se levantó informe de avería de transporte."
+                    if is_diff
+                    else None
+                ),
+            },
+            notes=(
+                "Acta de conformidad de llegada de transferencia. La mercadería conforme ha sido "
+                "ingresada al área de recepción para su posterior almacenamiento."
+            ),
+            visual_signature=VisualSignatureContext(
+                signer_name="Enrique Gutiérrez Soto",
+                signer_role="Jefe de Almacén Receptor (Arequipa)",
+                signed_at="2026-08-29 18:00:00 UTC",
+            ),
+            watermark_text="VISTA PREVIA",
+        )
+        return ctx, template_key
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Código documental de inventario no soportado: {doc_code}. "
+                "Soportados: LBL, MOV, INV_ADJ (ADJ), CNT, CDIFF, TRF, TRF_REC (TREC)."
+            ),
+        )
+
+
+@router.post(
+    "/document-renderer/inventory/{doc_code}/sample",
+    summary="Generate canonical sample preview for inventory document types",
+    dependencies=[Depends(require_permission("document_templates.preview"))],
+)
+def render_inventory_sample_document(
+    doc_code: str,
+    scenario: str = Query(
+        "basic", description="Scenario: basic, blind, multipage, long_text, difference"
+    ),
+    status_code: Optional[str] = Query(
+        None,
+        description=(
+            "Document status (e.g. ACTIVE, EXECUTED, APPROVED, IN_PROGRESS, IN_TRANSIT, RECEIVED)"
+        ),
+    ),
+    format: str = Query("pdf", description="Output format: pdf or html"),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    db: Session = Depends(get_db),
+):
+    """Renders canonical synthetic preview for inventory package documents (F017)."""
+    branch_name = "Sede Principal Lima"
+    branch_code = "LIM"
+    org_name = "Organización Logística Integral del Perú"
+    tax_id = "20100012345"
+    branch_address = "Av. Industrial 456, Parque Logístico, Callao, Lima"
+
+    if principal.organization_id:
+        from app.modules.organization.models import Branch, Organization
+
+        org = db.query(Organization).filter(Organization.id == principal.organization_id).first()
+        if org:
+            org_name = org.name
+        branch = (
+            db.query(Branch).filter(Branch.organization_id == principal.organization_id).first()
+        )
+        if branch:
+            branch_name = branch.name
+            branch_code = branch.code
+            if branch.location and branch.location.address_line1:
+                branch_address = branch.location.address_line1
+
+    ctx, template_key = build_inventory_sample_context(
+        doc_code=doc_code,
+        scenario=scenario,
+        status_code=status_code,
+        org_name=org_name,
+        tax_id=tax_id,
+        branch_name=branch_name,
+        branch_code=branch_code,
+        branch_address=branch_address,
+        user_email=principal.email,
+    )
+
+    service = DocumentRenderingService()
+    pdf_bytes, html_content, snapshot_hash, pdf_hash = service.process_and_render(
+        context=ctx,
+        template_key=template_key,
+    )
+
+    headers = {
+        "X-Snapshot-Hash": snapshot_hash,
+        "X-Pdf-Hash": pdf_hash,
+        "X-Template-Key": template_key,
+        "X-Document-Type": doc_code.upper(),
+        "X-Renderer-Name": "WeasyPrint",
+        "X-Renderer-Version": "69.0",
+    }
+
+    if format.lower() == "html":
+        return HTMLResponse(content=html_content, headers=headers)
+
+    filename = f"{ctx.document.display_code}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            **headers,
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )

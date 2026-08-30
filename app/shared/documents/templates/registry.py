@@ -222,6 +222,100 @@ class TemplateRegistry:
             supported_statuses=["ISSUED", "ACCEPTED_BY_SUPPLIER", "CLOSED"],
             created_at="2026-08-29T00:00:00Z",
         ),
+        # Inventory (F017)
+        "location_label_v1": TemplateManifest(
+            template_key="location_label_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Etiqueta de Ubicación / Pallet",
+            description="Identificador físico de posición de estante, pallet o lote en almacén.",
+            page_size="100x150mm",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["ACTIVE", "OBSOLETE"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "inventory_movement_v1": TemplateManifest(
+            template_key="inventory_movement_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Movimiento Interno de Inventario",
+            description="Reubicación física de existencias entre posiciones de un mismo almacén.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["EXECUTED", "CANCELLED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "inventory_adjustment_v1": TemplateManifest(
+            template_key="inventory_adjustment_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Ajuste de Inventario",
+            description=(
+                "Acta de modificación controlada de stock por merma, desmedro o regularización."
+            ),
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "physical_count_v1": TemplateManifest(
+            template_key="physical_count_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Conteo Físico / Inventario Cíclico",
+            description="Planilla de toma física con soporte de conteo ciego (Blind Count).",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["IN_PROGRESS", "FINALIZED", "CANCELLED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "count_difference_v1": TemplateManifest(
+            template_key="count_difference_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Diferencia de Conteo Físico",
+            description="Balance comparativo entre stock teórico del sistema y conteo físico real.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "RECONCILED", "APPROVED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "warehouse_transfer_v1": TemplateManifest(
+            template_key="warehouse_transfer_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Solicitud de Transferencia entre Almacenes",
+            description="Orden de traspaso de existencias entre dos almacenes de la organización.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["DRAFT", "REQUESTED", "IN_TRANSIT", "COMPLETED", "CANCELLED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
+        "transfer_receipt_v1": TemplateManifest(
+            template_key="transfer_receipt_v1",
+            family="inventory",
+            version="1.0.0",
+            title="Recepción de Transferencia",
+            description="Acta de conformidad y verificación de llegada de mercadería transferida.",
+            page_size="A4",
+            orientation="portrait",
+            supported_renderer="WeasyPrint",
+            required_context_fields=["organization", "branch", "document", "metadata"],
+            supported_statuses=["RECEIVED", "DISCREPANCY_FOUND", "CLOSED"],
+            created_at="2026-08-29T00:00:00Z",
+        ),
     }
 
     _template_files: Dict[str, str] = {
@@ -246,6 +340,16 @@ class TemplateRegistry:
         "receiving_difference_v1": "receiving/receiving_difference_v1.html",
         "receiving_diff_v1": "receiving/receiving_difference_v1.html",
         "non_conformity_v1": "receiving/non_conformity_v1.html",
+        # Inventory
+        "location_label_v1": "inventory/location_label_v1.html",
+        "inventory_movement_v1": "inventory/inventory_movement_v1.html",
+        "inventory_adjustment_v1": "inventory/inventory_adjustment_v1.html",
+        "physical_count_v1": "inventory/physical_count_v1.html",
+        "stock_count_v1": "inventory/physical_count_v1.html",
+        "count_difference_v1": "inventory/count_difference_v1.html",
+        "warehouse_transfer_v1": "inventory/warehouse_transfer_v1.html",
+        "transfer_request_v1": "inventory/warehouse_transfer_v1.html",
+        "transfer_receipt_v1": "inventory/transfer_receipt_v1.html",
     }
 
     @classmethod
@@ -270,6 +374,10 @@ class TemplateRegistry:
             resolved_key = "supplier_send_confirmation_v1"
         elif template_key == "receiving_diff_v1":
             resolved_key = "receiving_difference_v1"
+        elif template_key == "stock_count_v1":
+            resolved_key = "physical_count_v1"
+        elif template_key == "transfer_request_v1":
+            resolved_key = "warehouse_transfer_v1"
 
         if resolved_key not in cls._manifests:
             raise DomainError(
